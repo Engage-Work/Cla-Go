@@ -11,3 +11,6 @@
 *.js   linguist-detectable=true
 *.css  linguist-detectable=true
 lib/three.min.js linguist-vendored=true
+
+# Windows 批处理必须是 CRLF
+*.cmd text eol=crlf

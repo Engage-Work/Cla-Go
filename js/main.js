@@ -116,11 +116,13 @@ const Engine = {
     window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
     await this.step(1, '完成');
     this.bindUI();
+    Lobby.init();
+    this.startBgPump();
     window.addEventListener('resize', () => this.resize());
     this.resize();
     $('loading').classList.add('hidden');
     $('menu').classList.remove('hidden');
-    $('verLabel').textContent = `v${VERSION} · 爆发式滑铲 · 经典 FPS 移动物理 · 128 tick`;
+    $('verLabel').textContent = `v${VERSION} · 爆发式滑铲 · 经典 FPS 移动物理 · 128 tick · 局域网联机`;
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
   },
@@ -234,11 +236,14 @@ const Engine = {
   },
 
   // ---------------- 对局 ----------------
-  startGame() {
+  // net：联机时由大厅传入 { opts, ctx }，ctx 为 NetHost / NetClient
+  startGame(net) {
     Sound.init(); Sound.resume(); Sound.startAmbience();
-    if (this.game) { this.game.dispose(); this.game = null; }
+    if (this.game) { const old = this.game; this.game = null; old.dispose(); }
     Effects.clearAll();
-    this.game = new Game(this, Object.assign({}, this.opts));
+    const opts = Object.assign({}, this.opts, net ? net.opts : {});
+    if (net) { opts.net = net.ctx; $('lobby').classList.add('hidden'); }
+    this.game = new Game(this, opts);
     HUD.bind(this.game);
     this.game.mode.id === 'comp' && HUD.openBuy(this.game);
     $('menu').classList.add('hidden');
@@ -249,8 +254,10 @@ const Engine = {
     this.acc = 0;
     if (!this.forceRun) Input.lock();
   },
-  quitToMenu() {
-    if (this.game) { this.game.dispose(); this.game = null; }
+  // silent：网络那头已经结束了对局（房主散场 / 掉线），不用再通知
+  quitToMenu(silent) {
+    const wasNet = !!(this.game && this.game.net);
+    if (this.game) { const g = this.game; this.game = null; g.dispose(); }
     Input.unlock(); Input.exitFullscreen();
     $('hud').classList.add('hidden'); $('pause').classList.add('hidden'); $('clickToPlay').classList.add('hidden');
     HUD.scoreboard(false); HUD.closeBuy();
@@ -258,6 +265,7 @@ const Engine = {
     this.camera.layers.set(0);
     this.camera.fov = 73.74; this.camera.updateProjectionMatrix();
     Sound.stopAll();
+    if (wasNet && !silent) Lobby.gameEnded();
   },
   pause() {
     if (!this.game) return;
@@ -283,14 +291,14 @@ const Engine = {
     fu.time.value = now / 1000;
     if (g) {
       const live = !this.paused && (Input.locked || this.forceRun);
-      if (live) {
+      // 联机时暂停只是不接收本机输入，对局本身（以及给别人的同步）不能停
+      if (live || g.net) {
         const [mx, my] = Input.takeMouse();
-        g.applyLook(mx, my);
-        this.acc += dt; let n = 0;
-        while (this.acc >= TICK && n < 16) { g.buildPlayerCmd(); g.tick(TICK); Input.endTick(); this.acc -= TICK; n++; }
-        if (n >= 16) this.acc = 0;
+        if (live) g.applyLook(mx, my);
+        this.advance(dt, live);
         g.fps = this.fps;
-        g.render(dt, this.acc / TICK, mx, my);
+        g.render(dt, this.acc / TICK, live ? mx : 0, live ? my : 0);
+        if (!live && !this.paused && !this.forceRun) $('clickToPlay').classList.remove('hidden');
       } else {
         Input.takeMouse();
         g.render(0.0001, 1, 0, 0);
@@ -314,6 +322,29 @@ const Engine = {
       fu.flash.value = 0; fu.damage.value = 0; fu.lowhp.value = 0; fu.blur.value = 0; fu.vignette.value = 0.35;
     }
     this.composer.render(dt);
+  },
+  // 固定步长推进对局
+  advance(dt, live) {
+    const g = this.game;
+    this.acc += dt; let n = 0;
+    while (this.acc >= TICK && n < 16) { if (live) g.buildPlayerCmd(); else g.idleCmd(); g.tick(TICK); Input.endTick(); this.acc -= TICK; n++; }
+    if (n >= 16) this.acc = 0;
+  },
+  // 联机时窗口切到后台/最小化：浏览器会停掉 requestAnimationFrame，改由 Worker 定时器继续推进
+  startBgPump() {
+    try {
+      const src = 'setInterval(() => postMessage(0), 16);';
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      w.onmessage = () => {
+        const g = this.game;
+        if (!g || !g.net || !document.hidden) return;
+        const now = performance.now();
+        let dt = (now - this.last) / 1000; this.last = now;
+        if (!(dt > 0)) return; if (dt > 0.1) dt = 0.1;
+        this.advance(dt, false);
+        if (g.client) g.net.update(dt); else g.syncModels();
+      };
+    } catch (e) { /* 不支持 Worker：后台时对局会暂停 */ }
   },
 
   // ---------------- 菜单 / 设置 UI ----------------

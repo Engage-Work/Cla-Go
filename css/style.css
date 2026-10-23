@@ -151,7 +151,7 @@ button.primary { background: linear-gradient(180deg, #ffc65c, #f29a18); color: #
 button.primary:hover { background: linear-gradient(180deg, #ffd47e, #ffab2e) !important; }
 .foot { margin-top: 26px; font-size: 12px; color: #6f6b64; letter-spacing: 1px; }
 
-#pause, #settings, #help { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,6,8,.62); backdrop-filter: blur(3px); z-index: 20; }
+#pause, #settings, #help, #lobby { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,6,8,.62); backdrop-filter: blur(3px); z-index: 20; }
 .panel { background: rgba(16,18,22,.96); border: 1px solid var(--line); border-radius: 8px; padding: 20px 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .panel.small { width: 320px; display: flex; flex-direction: column; gap: 8px; }
 .panel.wide { width: min(760px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
@@ -173,6 +173,33 @@ button.primary:hover { background: linear-gradient(180deg, #ffd47e, #ffab2e) !im
 kbd { display: inline-block; min-width: 22px; padding: 1px 6px; font: 12px var(--font); text-align: center; border: 1px solid rgba(255,255,255,.3); border-bottom-width: 2px; border-radius: 3px; background: rgba(255,255,255,.07); }
 .helptext { margin-top: 14px; font-size: 13.5px; line-height: 1.7; color: #d6d0c4; }
 .helptext p { margin: 6px 0; }
+
+/* ---------------- 联机大厅 ---------------- */
+#lobby .ptitle small { font-size: 13px; font-weight: 400; letter-spacing: 2px; color: var(--dim); margin-left: 6px; }
+.lbrow { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.lbrow label { width: 84px; font-size: 14px; color: var(--dim); }
+.lbrow input { flex: 1; max-width: 320px; padding: 8px 10px; font: 15px var(--font); color: var(--txt); background: #0d0f12; border: 1px solid var(--line); border-radius: 4px; user-select: text; }
+.lbrow input:focus { outline: none; border-color: var(--acc); }
+.lbtip { margin: 6px 0 4px; font-size: 13px; line-height: 1.7; color: var(--dim); }
+.lbtip b { color: var(--txt); }
+.row-actions.left { justify-content: flex-start; flex-wrap: wrap; }
+.lbrole { font-size: 13px; color: var(--dim); margin-bottom: 10px; user-select: text; }
+.lbteams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.lt { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; background: rgba(255,255,255,.03); min-height: 90px; }
+.lt h4 { margin: 0 0 8px; font-size: 14px; letter-spacing: 2px; }
+.lt.ct h4 { color: var(--ct); } .lt.t h4 { color: var(--t); }
+.lp { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 15px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.lp.me { color: #fff; font-weight: 600; }
+.lp.empty { color: #6f6b64; font-size: 13px; }
+.lp i { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--acc); color: #1a1206; }
+.lp .sw { margin-left: auto; font-size: 12px; color: var(--dim); cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+.lp .sw:hover { color: #fff; background: rgba(255,255,255,.1); }
+#lbOpts .opt label { width: 150px; }
+.seg.ro b { cursor: default; opacity: .75; }
+.seg.ro b:hover { background: rgba(255,255,255,.06); }
+.seg.ro b.on:hover { background: var(--acc); }
+#lbStatus { margin-top: 10px; font-size: 13px; }
+#lbStatus.err { color: var(--red); }
 
 #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at 50% 40%, #1d1913, #0a0a0b 70%); z-index: 40; }
 #loading .logo { font-size: 54px; font-weight: 700; letter-spacing: 12px; color: #ffbe55; }

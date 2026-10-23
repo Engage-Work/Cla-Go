@@ -31,24 +31,80 @@ class Game {
     this.fps = 60; this.spectating = false; this.viewTarget = null; this.deathT = 0; this.over = false; this.overT = 0;
     this.spotT = 0; this.crouchToggle = false; this.killer = null;
     this._rh = {};
-    const M = { tdm: ModeTDM, comp: ModeComp, range: ModeRange }[opts.mode];
-    this.mode = new M(this);
-    this.player = this.createActor(opts.team, false, '你');
+    // 联机：net = NetHost（房主，权威对局）或 NetClient（加入者，照快照显示）
+    this.net = opts.net || null; this.client = !!(this.net && this.net.client);
+    const M = this.client ? ModeMirror : { tdm: ModeTDM, comp: ModeComp, range: ModeRange }[opts.mode];
+    this.mode = new M(this, opts.mode);
+    this.player = this.createActor(opts.team, false, opts.name || '你');
     this.vm.setTeam(opts.team);
-    this.mode.setup();
+    if (this.net) this.net.attach(this);
+    if (!this.client) for (const h of opts.humans || []) this.createActor(h.team, false, h.name, h);
+    if (!this.client) this.mode.setup();
     this.camera.layers.set(0);
   }
 
   // ---------------- 角色 ----------------
-  createActor(team, isBot, name) {
-    const a = new Actor(this, { name, team, isBot, isPlayer: !isBot });
+  createActor(team, isBot, name, remote) {
+    const a = new Actor(this, { name, team, isBot, isPlayer: !isBot && !remote, remote: !!remote, pid: remote && remote.pid, knife: remote && remote.knife });
     a.model = new Models.Humanoid(team);
-    if (!isBot) { a.model.layer = 1; a.model.root.traverse((o) => o.layers.set(1)); }
+    if (!isBot && !remote) { a.model.layer = 1; a.model.root.traverse((o) => o.layers.set(1)); }
     a.model.root.visible = false;
     this.scene.add(a.model.root);
     if (isBot) a.brain = new BotBrain(a, this, this.opts.diff);
     this.actors.push(a);
     return a;
+  }
+  humans(team) { return this.actors.filter((a) => a.team === team && !a.isBot).length; }
+  // 房主：对局中途有人加入 / 离开
+  addRemote(h) {
+    const a = this.createActor(h.team, false, h.name, h), md = this.mode;
+    if (md.id === 'tdm') { md.loadout(a); md.spawn(a); }
+    else { a.money = 800; a.stripForNewGame(); a.alive = false; }   // 爆破：下一回合出生
+    return a;
+  }
+  removeRemote(pid) { const a = this.actors.find((x) => x.remote && x.pid === pid); if (a) this.removeActor(a); }
+  removeActor(a) {
+    if (a.alive && a.inv.c4 && this.mode.dropBomb) { a.inv.c4 = false; this.mode.dropBomb(a); }
+    a.alive = false;
+    if (a.model) { if (a.model.ragdoll) { a.model.ragdoll.dispose(); this.ragdolls = this.ragdolls.filter((r) => r !== a.model.ragdoll); } else this.scene.remove(a.model.root); }
+    this.actors = this.actors.filter((x) => x !== a);
+    for (const o of this.actors) if (o.brain && o.brain.target === a) o.brain.target = null;
+    if (this.viewTarget === a) this.viewTarget = null;
+    if (this.net && this.net.host) this.net.rosterDirty = true;
+  }
+  // 加入者：按房主名单建出的镜像角色（不跑 AI、不跑物理）
+  createMirror(r) {
+    const a = new Actor(this, { name: r.name, team: r.team, isBot: !!r.bot, isPlayer: false });
+    a.mirror = true;
+    a.model = new Models.Humanoid(r.team);
+    a.model.root.visible = false;
+    this.scene.add(a.model.root);
+    this.actors.push(a);
+    return a;
+  }
+
+  // ---------------- 联机广播（只有房主发） ----------------
+  emit(ev) { if (this.net && this.net.host) this.net.emit(ev); }
+  emitSnd(name, pos, o) {
+    if (!(this.net && this.net.host)) return;
+    const oo = Object.assign({}, o); delete oo.src; delete oo.net;
+    this.net.emit({ t: 'snd', n: name, p: nv(pos), o: oo, s: o.src });
+  }
+  // 本机播放并同步给所有人的特效
+  fx(name, ...args) { Effects[name](...args); this.emit({ t: 'fx', f: name, a: args.map(fxEnc) }); }
+  // 按每个玩家的视角各说各的：spec 为参数数组，或 (角色) => 参数数组 / null
+  center(spec) {
+    const f = typeof spec === 'function' ? spec : () => spec;
+    const mine = f(this.player); if (mine) HUD.center(...mine);
+    if (this.net && this.net.host) for (const a of this.actors) if (a.remote) { const r = f(a); if (r) this.net.tell(a, { t: 'ctr', a: r }); }
+  }
+  sound2d(spec) {
+    const f = typeof spec === 'function' ? spec : () => spec;
+    for (const a of this.actors) if (a.isPlayer || a.remote) { const r = f(a); if (r) a.sfx(r[0], r[1]); }
+  }
+  openBuyAll() {
+    HUD.openBuy(this);
+    if (this.net && this.net.host) for (const a of this.actors) if (a.remote) this.net.tell(a, { t: 'ob' });
   }
   resetModel(a, force) {
     const h = a.model;
@@ -103,6 +159,8 @@ class Game {
 
   // ---------------- 声音 ----------------
   playAt(name, pos, o = {}) {
+    // 房主默认把定位音同步给所有人；加入者自己会模拟出来的（枪声/弹着/手雷）标 net:false
+    if (o.net !== false) this.emitSnd(name, pos, o);
     const cam = this.camera.position;
     const d = cam.distanceTo(pos);
     if (o.maxDist && d > o.maxDist) return;
@@ -151,7 +209,7 @@ class Game {
         const friendly = v.team === sh.team;
         if ((!friendly || this.opts.ff) && !(v.isPlayer && v.alive)) {
           Effects.blood(pt, d, ah.group === 'head');
-          this.playAt('imp_flesh', pt, { vol: 0.7, ref: 2, maxDist: 35, rev: 0 });
+          this.playAt('imp_flesh', pt, { vol: 0.7, ref: 2, maxDist: 35, rev: 0, net: false });
         }
         this.applyDamage(v, sh, damage, ah.group, def, d, pt, wall);
         hitSomeone = true;
@@ -168,8 +226,8 @@ class Game {
       if (!tracerEnd) tracerEnd = hp.clone();
       const mat = MATS[whBox.mat] || MATS.stone;
       if (hp.distanceToSquared(this.camera.position) < 900) {
-        this.playAt(mat.snd, hp, { vol: 0.5, ref: 1.5, maxDist: 30, rev: 0 });
-        if (mat.fx !== 'sand' && Math.random() < 0.12) this.playAt('ricochet', hp, { vol: 0.35, ref: 2, maxDist: 30 });
+        this.playAt(mat.snd, hp, { vol: 0.5, ref: 1.5, maxDist: 30, rev: 0, net: false });
+        if (mat.fx !== 'sand' && Math.random() < 0.12) this.playAt('ricochet', hp, { vol: 0.35, ref: 2, maxDist: 30, net: false });
       }
       // 穿透
       const maxThick = (def.pen || 0) * mat.pen;
@@ -222,7 +280,7 @@ class Game {
       Effects.shell(ej, vel, def.type === 'sniper');
     } else {
       const m = a.model.weapon ? a.model.weapon.muzzle.getWorldPosition(_g1) : a.eyePos(_g1);
-      this.playAt('shot_' + def.sound, m, { vol: def.vol * 1.3, ref: def.suppressed ? 2.5 : 6, roll: 0.9, rev: 0.4 });
+      this.playAt('shot_' + def.sound, m, { vol: def.vol * 1.3, ref: def.suppressed ? 2.5 : 6, roll: 0.9, rev: 0.4, net: false });
       if (!def.suppressed) {
         Effects.muzzle(m, def.type === 'sniper' ? 1.6 : def.type === 'pistol' ? 0.7 : 1);
         if (m.distanceTo(cam.position) < 35) Effects.light(m, 1.8, 0.05);
@@ -231,7 +289,7 @@ class Game {
         const f = a.forward(_g2), r = _g3.set(Math.cos(a.yaw), 0, -Math.sin(a.yaw));
         Effects.shell(m.clone().addScaledVector(f, -0.45), new THREE.Vector3().addScaledVector(r, rand(1.5, 2.5)).add(_g4.set(0, rand(1, 2), 0)).add(a.vel), def.type === 'sniper');
       }
-      if (def.type === 'sniper') this.playAt('awpbolt', a.pos, { vol: 0.5, ref: 2, delay: 0.35, maxDist: 25 });
+      if (def.type === 'sniper') this.playAt('awpbolt', a.pos, { vol: 0.5, ref: 2, delay: 0.35, maxDist: 25, net: false });
     }
     this.noise(a, a.pos, def.suppressed ? 12 : 75);
   }
@@ -257,17 +315,19 @@ class Game {
       const dmg = heavy ? (back ? 180 : 65) : (back ? 90 : combo ? 25 : 40);
       const pt = eye.clone().addScaledVector(best.d, best.t);
       this.applyDamage(v, a, dmg, back ? 'chest' : best.group === 'head' ? 'chest' : best.group, a.def.type === 'knife' ? a.def : WEAPONS.knife, best.d, pt, false, true);
-      Effects.blood(pt, best.d, heavy);
+      this.fx('blood', pt, best.d, heavy);
       this.playAt('knife_flesh', pt, { vol: 0.8, ref: 2 });
     } else if (best.wall) {
       const pt = eye.clone().addScaledVector(best.d, best.t);
-      Effects.impact(pt, best.n, best.box.mat, best.d, best.box.noDecal);
+      this.fx('impact', pt, best.n, best.box.mat, best.d, best.box.noDecal);
       this.playAt('knife_wall', pt, { vol: 0.7, ref: 2 });
     }
   }
 
   // ---------------- 伤害 / 击杀 ----------------
   applyDamage(v, att, dmg, group, def, dir, point, wall, melee) {
+    // 加入者不结算伤害：只把自己的坠落伤害报给房主
+    if (this.client) { if (v === this.player && group === 'fall' && v.alive) this.net.send({ t: 'fall', d: dmg }); return; }
     if (!v.alive || this.over) return;
     const ff = this.opts.ff;
     if (att && att !== v && att.team === v.team && !ff) return;
@@ -284,9 +344,12 @@ class Game {
     if (att && att !== v) { v.damageBy.set(att, (v.damageBy.get(att) || 0) + d); v.lastAttacker = att; }
     v.lastHitTime = this.time;
     if (def && def.type !== 'knife' && group !== 'fall') v.velMod = Math.min(v.velMod, group === 'leg' ? 0.62 : 0.5);
-    if (v.isPlayer) {
+    if (v.isPlayer || v.remote) {
       v.aimPunchP += (armored ? 1.0 : 2.6) * rand(0.6, 1.1) * (def && def.type === 'sniper' ? 2 : 1);
       v.aimPunchY += rand(-1, 1) * 1.3;
+    }
+    if (this.net) this.emit({ t: 'dmg', v: v.id, k: att ? att.id : 0, d, g: group, ar: armored ? 1 : 0, e: att && att !== v && v.team !== att.team ? 1 : 0, kl: v.hp <= 0 ? 1 : 0 });
+    if (v.isPlayer) {
       this.dmgFlash = Math.min(1, this.dmgFlash + d / 60 + 0.25);
       Sound.play('hurt', { vol: 0.55 });
       if (att && att !== v) {
@@ -317,31 +380,39 @@ class Game {
     for (const [o, dd] of v.damageBy) if (o !== att && dd >= 41 && o.team !== v.team) o.assists++;
     HUD.killfeed({ killer: att && att !== v ? att : null, victim: v, weapon: def ? def.name : '坠落', hs, wallbang: wall, mine: (att && att.isPlayer) || v.isPlayer });
     if (att && att.isPlayer && att !== v) Sound.play('kill', { vol: 0.35 });
+    // 先广播：加入者要在武器掉落之前用同一个姿态生成布娃娃
+    if (this.net) this.emit({ t: 'kill', v: v.id, k: att ? att.id : 0, w: def ? def.name : '坠落', hs: hs ? 1 : 0, wb: wall ? 1 : 0, dir: dir ? nv(dir) : null, g: group });
     // 掉落
     if (v.inv.primary) v.lastPrimary = v.inv.primary.id;
     const drop = v.inv.primary || v.inv.secondary;
     if (drop && md.id !== 'range') { this.dropWeapon(v, drop); if (drop === v.inv.primary) v.inv.primary = null; else v.inv.secondary = null; }
     if (v.inv.c4) { v.inv.c4 = false; md.dropBomb && md.dropBomb(v); }
-    // 布娃娃
-    const h = v.model;
-    if (h && !h.ragdoll) {
-      const imp = (dir ? dir.clone() : new THREE.Vector3()).multiplyScalar(group === 'head' ? 4.2 : 3.0 + Math.random()).add(_g1.set(0, 0.8, 0));
-      if (group === 'fall') imp.set(0, 0, 0);
-      h.ragdoll = new Ragdoll(h, this.scene, this.world, v.vel, imp, group);
-      this.ragdolls.push(h.ragdoll);
-      if (this.ragdolls.length > 14) { const r = this.ragdolls.shift(); r.dispose(); }
-      if (hs || Math.random() < 0.4) this.later(1.2, () => { if (!v.alive && h.ragdoll) Effects.bloodPool(h.ragdoll.p[1]); });
-    }
+    this.makeRagdoll(v, dir, group, hs);
     if (v.brain) v.brain.reset();
-    if (v.isPlayer) {
-      this.deathT = 0; this.killer = att && att !== v ? att : null;
-      // 死亡视角：从自己眼睛位置拉到尸体后上方，鼠标可自由环绕（不再自动锁定击杀者）
-      this.deathYaw = v.yaw; this.deathPitch = -0.42; this.deathEye = v.eyePos(new THREE.Vector3()); this.deathQuat = this.camera.quaternion.clone();
-      const kd = this.killer ? `被 <span class="c${this.killer.team}">${this.killer.name}</span> 使用 ${def ? def.name : ''} 击杀${hs ? '（爆头）' : ''}${wall ? '（穿墙）' : ''}` : '你阵亡了';
-      HUD.showDeath(kd, this.killer ? `对方剩余生命 ${Math.max(0, this.killer.hp)}` : '');
-      Sound.stopAll();
-    }
+    if (v.isPlayer) this.playerDied(att && att !== v ? att : null, def ? def.name : '', hs, wall);
     md.onKill(v, att, hs);
+  }
+  // 布娃娃（房主和加入者共用）
+  makeRagdoll(v, dir, group, hs) {
+    const h = v.model;
+    if (!h || h.ragdoll) return;
+    const imp = (dir ? dir.clone() : new THREE.Vector3()).multiplyScalar(group === 'head' ? 4.2 : 3.0 + Math.random()).add(_g1.set(0, 0.8, 0));
+    if (group === 'fall') imp.set(0, 0, 0);
+    h.root.visible = true;
+    h.ragdoll = new Ragdoll(h, this.scene, this.world, v.vel, imp, group);
+    this.ragdolls.push(h.ragdoll);
+    if (this.ragdolls.length > 14) { const r = this.ragdolls.shift(); r.dispose(); }
+    if (hs || Math.random() < 0.4) this.later(1.2, () => { if (!v.alive && h.ragdoll) Effects.bloodPool(h.ragdoll.p[1]); });
+  }
+  // 本机玩家阵亡：死亡视角 + 提示
+  playerDied(killer, wname, hs, wall) {
+    const v = this.player;
+    this.deathT = 0; this.killer = killer;
+    // 死亡视角：从自己眼睛位置拉到尸体后上方，鼠标可自由环绕（不再自动锁定击杀者）
+    this.deathYaw = v.yaw; this.deathPitch = -0.42; this.deathEye = v.eyePos(new THREE.Vector3()); this.deathQuat = this.camera.quaternion.clone();
+    const kd = killer ? `被 <span class="c${killer.team}">${killer.name}</span> 使用 ${wname} 击杀${hs ? '（爆头）' : ''}${wall ? '（穿墙）' : ''}` : '你阵亡了';
+    HUD.showDeath(kd, killer ? `对方剩余生命 ${Math.max(0, killer.hp)}` : '');
+    Sound.stopAll();
   }
 
   // ---------------- 掉落物 ----------------
@@ -352,8 +423,10 @@ class Game {
     const d = { inst, c4: !!isC4, mesh: mdl.group, pos: eye.clone().addScaledVector(f, 0.35).add(_g1.set(0, -0.35, 0)),
       vel: f.multiplyScalar(a.alive ? 4.2 : 0.8).add(a.vel), ry: Math.random() * 6.28, spin: rand(4, 9), rest: false, t: 0, owner: a };
     if (this.world.pointSolid(d.pos.x, d.pos.y, d.pos.z)) d.pos.copy(a.pos).add(_g1.set(0, 0.5, 0));
+    d.nid = this._dropSeq = (this._dropSeq || 0) + 1;
     this.drops.push(d);
-    if (this.drops.length > 22) { const i = this.drops.findIndex((x) => !x.c4); if (i >= 0) { this.scene.remove(this.drops[i].mesh); this.drops.splice(i, 1); } }
+    this.emit({ t: 'drop', n: d.nid, w: isC4 ? 'c4' : inst.id, c4: isC4 ? 1 : 0, p: nv(d.pos), v: nv(d.vel), ry: r3(d.ry), sp: r3(d.spin) });
+    if (this.drops.length > 22) { const i = this.drops.findIndex((x) => !x.c4); if (i >= 0) this.removeDrop(i); }
     return d;
   }
   dropActive(a) {
@@ -380,9 +453,10 @@ class Game {
       d.mesh.rotation.set(0, d.ry, d.rest ? Math.PI / 2 : d.t * 6, 'YXZ');
       if (d.c4) d.mesh.rotation.set(0, d.ry, 0);
     }
-    // 拾取
+    // 拾取（只在房主 / 单机结算）
+    if (this.client) return;
     for (const a of this.actors) {
-      if (!a.alive) continue;
+      if (!a.alive || a.mirror) continue;
       for (let i = this.drops.length - 1; i >= 0; i--) {
         const d = this.drops[i];
         if (d.owner === a && d.t < 2.5) continue;
@@ -394,7 +468,7 @@ class Game {
         }
         const def = d.inst.def, has = def.slot === 1 ? a.inv.primary : a.inv.secondary;
         if (!has) { this.take(a, d, i); continue; }
-        if (a.isPlayer && a.cmd.usePressed) {
+        if ((a.isPlayer || a.remote) && a.cmd.usePressed) {
           const cur = def.slot === 1 ? a.inv.primary : a.inv.secondary;
           this.dropWeapon(a, cur);
           if (def.slot === 1) a.inv.primary = null; else a.inv.secondary = null;
@@ -408,13 +482,14 @@ class Game {
     const def = d.inst.def;
     if (def.slot === 1) a.inv.primary = d.inst; else a.inv.secondary = d.inst;
     this.removeDrop(i);
-    if (a.isPlayer) Sound.play('magin', { vol: 0.4 });
+    a.sfx('magin', 0.4);
     if (a.slot === 'knife' || (def.slot === 1 && a.slot === 'secondary') || a.isBot) { a.switchTo(def.slot === 1 ? 'primary' : 'secondary'); }
   }
-  removeDrop(i) { this.scene.remove(this.drops[i].mesh); this.drops.splice(i, 1); }
+  removeDrop(i) { this.emit({ t: 'undrop', n: this.drops[i].nid }); this.scene.remove(this.drops[i].mesh); this.drops.splice(i, 1); }
 
   // ---------------- 投掷物 ----------------
   spawnGrenade(id, pos, vel, owner) {
+    this.emit({ t: 'nade', id, p: nv(pos), v: nv(vel), a: owner.id });
     const mdl = Models.thirdPerson(id);
     this.scene.add(mdl.group);
     this.grenades.push({ id, pos: pos.clone(), vel: vel.clone(), owner, t: 0, mesh: mdl.group, rest: false, still: 0, spin: new THREE.Vector3(rand(-12, 12), rand(-12, 12), rand(-12, 12)), done: false });
@@ -439,7 +514,7 @@ class Game {
           const vn = g.vel.dot(n);
           g.vel.addScaledVector(n, -1.45 * vn);
           g.vel.multiplyScalar(0.72);
-          if (Math.abs(vn) > 1.5) this.playAt('bounce', g.pos, { vol: clamp(Math.abs(vn) / 10, 0.1, 0.6), ref: 2, rate: 1.0, maxDist: 30 });
+          if (Math.abs(vn) > 1.5) this.playAt('bounce', g.pos, { vol: clamp(Math.abs(vn) / 10, 0.1, 0.6), ref: 2, rate: 1.0, maxDist: 30, net: false });
           if (n.y > 0.7 && g.vel.length() < 0.6) { g.rest = true; g.vel.set(0, 0, 0); break; }
           g.spin.multiplyScalar(0.6);
         }
@@ -458,7 +533,7 @@ class Game {
     if (g.id === 'he') {
       g.mesh.visible = false;
       Effects.explosion(p);
-      this.playAt('explode', p, { vol: 1.6, ref: 10, roll: 0.8, rev: 0.6 });
+      this.playAt('explode', p, { vol: 1.6, ref: 10, roll: 0.8, rev: 0.6, net: false });
       for (const a of this.actors) {
         if (!a.alive) continue;
         const c = _g2.set(a.pos.x, a.pos.y + 0.9, a.pos.z);
@@ -476,7 +551,7 @@ class Game {
     } else if (g.id === 'flash') {
       g.mesh.visible = false;
       Effects.flashPop(p);
-      this.playAt('flashbang', p, { vol: 1.4, ref: 8, roll: 0.8, rev: 0.5 });
+      this.playAt('flashbang', p, { vol: 1.4, ref: 8, roll: 0.8, rev: 0.5, net: false });
       for (const a of this.actors) {
         if (!a.alive) continue;
         const eye = a.eyePos(_g2), d = eye.distanceTo(p);
@@ -494,7 +569,7 @@ class Game {
       }
     } else if (g.id === 'smoke') {
       Effects.smoke(p);
-      this.playAt('smokepop', p, { vol: 1.0, ref: 4 });
+      this.playAt('smokepop', p, { vol: 1.0, ref: 4, net: false });
     }
   }
 
@@ -518,6 +593,7 @@ class Game {
     if (!(md.canBuy && md.canBuy(a))) return false;
     const st = this.buyState(a, id);
     if (!st.ok) { if (ui) Sound.play('ui_deny'); return false; }
+    if (this.client) { this.net.send({ t: 'buy', id }); if (ui) Sound.play('ui_buy', { vol: 0.6 }); return true; }
     let price = st.price;
     if (id === 'helmet' && a.armor >= 100 && !a.helmet && !md.infiniteMoney) price = 350;
     if (!md.infiniteMoney) a.money -= price;
@@ -614,9 +690,15 @@ class Game {
   tick(dt) {
     this.time += dt;
     for (let i = this.timers.length - 1; i >= 0; i--) if (this.time >= this.timers[i].t) { const f = this.timers[i].fn; this.timers.splice(i, 1); f(); }
+    if (this.client) return this.tickClient(dt);
+    if (this.net) this.net.preTick();
     for (const a of this.actors) if (a.brain && a.alive) a.brain.tick(dt);
-    for (const a of this.actors) { a.simulate(dt); a.updateWeapon(dt); }
-    // 角色之间的软碰撞
+    for (const a of this.actors) {
+      if (a.remote) a.netSim(dt); else a.simulate(dt);
+      a.updateWeapon(dt);
+      if (!a.isPlayer && !a.remote) a.events.length = 0;   // 机器人没有第一人称动画，事件直接丢掉
+    }
+    // 角色之间的软碰撞（远端玩家的位置以对方本机为准，这里不推它）
     const al = this.actors;
     for (let i = 0; i < al.length; i++) {
       const a = al[i]; if (!a.alive) continue;
@@ -625,14 +707,68 @@ class Game {
         const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz);
         if (d >= 0.8 || Math.abs(b.pos.y - a.pos.y) > 1.6 || d < 1e-4) continue;
         const push = (0.8 - d) * 0.5, nx = dx / d * push, nz = dz / d * push;
-        if (!this.world.overlapHull(a.pos.x - nx, a.pos.y, a.pos.z - nz, PHYS.hullHalf, a.hullH())) { a.pos.x -= nx; a.pos.z -= nz; }
-        if (!this.world.overlapHull(b.pos.x + nx, b.pos.y, b.pos.z + nz, PHYS.hullHalf, b.hullH())) { b.pos.x += nx; b.pos.z += nz; }
+        if (!a.remote && !this.world.overlapHull(a.pos.x - nx, a.pos.y, a.pos.z - nz, PHYS.hullHalf, a.hullH())) { a.pos.x -= nx; a.pos.z -= nz; }
+        if (!b.remote && !this.world.overlapHull(b.pos.x + nx, b.pos.y, b.pos.z + nz, PHYS.hullHalf, b.hullH())) { b.pos.x += nx; b.pos.z += nz; }
       }
     }
     this.updateGrenades(dt);
     this.updateDrops(dt);
     this.mode.tick(dt);
+    if (this.net) this.net.postTick();
     if (this.over) { this.overT += dt; if (this.overT > 9) this.eng.quitToMenu(); }
+  }
+  // 加入者：只模拟自己的移动；手雷 / 掉落物照房主给的初速度本地演算
+  tickClient(dt) {
+    const P = this.player;
+    P.simulate(dt);
+    if (P.alive) {
+      for (const b of this.actors) {
+        if (b === P || !b.alive) continue;
+        const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
+        if (d >= 0.8 || Math.abs(b.pos.y - P.pos.y) > 1.6 || d < 1e-4) continue;
+        const nx = dx / d * (0.8 - d) * 0.5, nz = dz / d * (0.8 - d) * 0.5;
+        if (!this.world.overlapHull(P.pos.x - nx, P.pos.y, P.pos.z - nz, PHYS.hullHalf, P.hullH())) { P.pos.x -= nx; P.pos.z -= nz; }
+      }
+    }
+    this.updateGrenades(dt);
+    this.updateDrops(dt);
+    this.net.sendInput();
+  }
+  // 后台不渲染时也要让命中盒跟着角色走（机器人开枪按模型骨骼判定）
+  syncModels() {
+    for (const a of this.actors) {
+      if (!a.alive || !a.model || a.model.ragdoll) continue;
+      const r = a.model.root; r.position.copy(a.pos); a.renderPos.copy(a.pos); r.rotation.y = a.yaw; r.updateMatrixWorld(true);
+    }
+  }
+  idleCmd() { const c = this.player.cmd; Object.assign(c, newCmd(), { duck: this.crouchToggle && c.duck }); }
+
+  // ---------------- 回合清场 / C4（房主与加入者共用） ----------------
+  clearRoundFx() {
+    Effects.clearRound();
+    for (const d of this.drops) this.scene.remove(d.mesh); this.drops.length = 0;
+    for (const gr of this.grenades) this.scene.remove(gr.mesh); this.grenades.length = 0;
+    for (const r of this.ragdolls) r.dispose(); this.ragdolls.length = 0;
+    if (this.mode.clearBomb) this.mode.clearBomb(); else if (this.mode.clearMesh) this.mode.clearMesh();
+    this.timers.length = 0;
+    this.emit({ t: 'clr' });
+  }
+  bombModel(pos, yaw) {
+    const m = Models.thirdPerson('c4');
+    m.group.position.set(pos.x, pos.y + 0.03, pos.z); m.group.rotation.y = yaw;
+    this.scene.add(m.group);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.02, 0.02) }));
+    light.position.set(0.0, 0.1, -0.03); m.group.add(light);
+    return { group: m.group, light };
+  }
+  c4Fx(pos) {
+    Effects.explosion(pos); Effects.explosion(pos.clone().add(_g1.set(0, 1.5, 0)));
+    this.playAt('c4boom', pos, { vol: 2.0, ref: 25, roll: 0.5, rev: 0.8, net: false });
+    Effects.light(pos.clone().add(_g1.set(0, 2, 0)), 90, 0.8, 0xffa040, 45);
+    const dc = this.camera.position.distanceTo(pos);
+    this.shake = clamp(2 - dc / 30, 0.3, 2);
+    if (dc < 25) { this.flashAmt = Math.max(this.flashAmt, clamp(1 - dc / 25, 0, 0.8)); this.flashHold = 0.1; Sound.deafen(clamp(1 - dc / 30, 0.2, 0.9), 2.5); }
+    this.emit({ t: 'c4x', p: nv(pos) });
   }
 
   nextSpectate(dir) {
@@ -645,6 +781,7 @@ class Game {
 
   render(dt, alpha, mx, my) {
     const P = this.player, cam = this.camera;
+    if (this.client) this.net.update(dt);
     for (const a of this.actors) {
       if (a.alive) a.renderPos.lerpVectors(a.prevPos, a.pos, alpha);
       const h = a.model;
@@ -659,18 +796,18 @@ class Game {
       }
     }
     for (const r of this.ragdolls) r.update(dt);
-    // 雷达发现
+    // 雷达发现（联机时两队都要算，加入者直接用房主的结果）
     this.spotT -= dt;
-    if (this.spotT <= 0) {
+    if (this.spotT <= 0 && !this.client) {
       this.spotT = 0.15;
       for (const e of this.actors) {
-        if (!e.alive || e.team === P.team) continue;
+        if (!e.alive || (e.team === P.team && !this.net)) continue;
         const head = this.aimPoint(e, 'head', _g1);
         for (const t of this.actors) {
-          if (!t.alive || t.team !== P.team) continue;
+          if (!t.alive || t.team === e.team) continue;
           const eye = t.eyePos(_g2);
           if (eye.distanceTo(head) > 80) continue;
-          if (t.isPlayer) { const f = t.forward(_g3); if (f.dot(_g4.subVectors(head, eye).normalize()) < 0.5) continue; }
+          if (t.isPlayer || t.remote) { const f = t.forward(_g3); if (f.dot(_g4.subVectors(head, eye).normalize()) < 0.5) continue; }
           else if (!(t.brain && t.brain.target === e && t.brain.targetVisible)) continue;
           if (this.visible(eye, head)) { e.spottedT = this.time; break; }
         }
@@ -768,6 +905,7 @@ class Game {
     for (const d of this.drops) this.scene.remove(d.mesh);
     for (const g of this.grenades) this.scene.remove(g.mesh);
     if (this.mode.dispose) this.mode.dispose();
+    if (this.net) this.net.detach();
     Effects.clearAll();
     HUD.closeBuy();
   }
@@ -781,12 +919,12 @@ class ModeTDM {
   setup() {
     const g = this.g, n = g.opts.size;
     for (const team of ['CT', 'T']) {
-      const cnt = team === g.player.team ? n - 1 : n;
+      const cnt = Math.max(0, n - g.humans(team));
       for (let i = 0; i < cnt; i++) g.createActor(team, true, g.botName(team, i));
     }
     for (const a of g.actors) { this.loadout(a); this.spawn(a); }
-    HUD.center('团队死斗', '', 3, `先达到 ${this.limit} 击杀的队伍获胜 · 按 B 免费换枪`);
-    Sound.play('round_start', { vol: 0.5 });
+    g.center(['团队死斗', '', 3, `先达到 ${this.limit} 击杀的队伍获胜 · 按 B 免费换枪`]);
+    g.sound2d(['round_start', 0.5]);
   }
   loadout(a) {
     a.stripForNewGame();
@@ -843,8 +981,8 @@ class ModeTDM {
     const g = this.g;
     this.phase = 'over'; g.over = true; g.frozen = true; g.noFire = true;
     const w = this.score.CT === this.score.T ? null : this.score.CT > this.score.T ? 'CT' : 'T';
-    HUD.center(w ? (w === 'CT' ? '反恐精英获胜！' : '恐怖分子获胜！') : '平局', w ? (w === 'CT' ? 'win-ct' : 'win-t') : '', 9, `${this.score.CT} : ${this.score.T}`);
-    Sound.play(w === g.player.team ? 'round_win' : 'round_lose', { vol: 0.6 });
+    g.center([w ? (w === 'CT' ? '反恐精英获胜！' : '恐怖分子获胜！') : '平局', w ? (w === 'CT' ? 'win-ct' : 'win-t') : '', 9, `${this.score.CT} : ${this.score.T}`]);
+    g.sound2d((a) => [w === a.team ? 'round_win' : 'round_lose', 0.6]);
   }
 }
 
@@ -894,7 +1032,7 @@ class ModeComp {
   setup() {
     const g = this.g, n = g.opts.size;
     for (const team of ['CT', 'T']) {
-      const cnt = team === g.player.team ? n - 1 : n;
+      const cnt = Math.max(0, n - g.humans(team));
       for (let i = 0; i < cnt; i++) g.createActor(team, true, g.botName(team, i));
     }
     for (const a of g.actors) { a.money = 800; a.stripForNewGame(); }
@@ -905,12 +1043,7 @@ class ModeComp {
     const g = this.g;
     this.round++;
     if (this.round === this.half + 1) this.halftime();
-    Effects.clearRound();
-    for (const d of g.drops) g.scene.remove(d.mesh); g.drops.length = 0;
-    for (const gr of g.grenades) g.scene.remove(gr.mesh); g.grenades.length = 0;
-    for (const r of g.ragdolls) r.dispose(); g.ragdolls.length = 0;
-    this.clearBomb();
-    g.timers.length = 0;
+    g.clearRoundFx();
     const pts = { CT: shuffle(g.map.spawns.CT.slice()), T: shuffle(g.map.spawns.T.slice()) };
     for (const a of g.actors) {
       if (!a.alive) { a.inv.primary = null; a.inv.secondary = null; a.inv.nades = { he: 0, flash: 0, smoke: 0 }; a.armor = 0; a.helmet = false; a.inv.defuser = false; }
@@ -926,11 +1059,10 @@ class ModeComp {
     this.phase = 'freeze'; this.t = this.freezeTime; g.frozen = true; g.noFire = true;
     for (const a of g.actors) if (a.isBot) g.botBuy(a);
     this.assignTasks();
-    const P = g.player;
     HUD.hideDeath(); g.flashAmt = 0; g.deathT = 0;
     const last = this.round === this.half ? '（上半场最后一局）' : this.score.CT === this.toWin - 1 || this.score.T === this.toWin - 1 ? '（赛点）' : '';
-    HUD.center(`第 ${this.round} 回合${last}`, '', 3, P.team === 'T' ? (P.inv.c4 ? '你携带着 C4 —— 前往 A 或 B 包点安放' : '与队友一起攻占包点并安放 C4') : '守住 A / B 包点，阻止 C4 被安放');
-    HUD.openBuy(g);
+    g.center((P) => [`第 ${this.round} 回合${last}`, '', 3, P.team === 'T' ? (P.inv.c4 ? '你携带着 C4 —— 前往 A 或 B 包点安放' : '与队友一起攻占包点并安放 C4') : '守住 A / B 包点，阻止 C4 被安放']);
+    g.openBuyAll();
   }
   halftime() {
     const g = this.g;
@@ -943,7 +1075,7 @@ class ModeComp {
     this.score = { CT: this.score.T, T: this.score.CT };
     this.lossStreak = { CT: 0, T: 0 };
     g.vm.setTeam(g.player.team);
-    HUD.center('交换攻守', '', 3);
+    g.center(['交换攻守', '', 3]);
   }
   assignTasks() {
     const g = this.g, map = g.map;
@@ -980,7 +1112,7 @@ class ModeComp {
     const g = this.g;
     if (this.phase === 'freeze') {
       this.t -= dt;
-      if (this.t <= 0) { this.phase = 'live'; this.t = this.roundTime; g.frozen = false; g.noFire = false; Sound.play('round_start', { vol: 0.5 }); HUD.center('行动！', '', 1.2); }
+      if (this.t <= 0) { this.phase = 'live'; this.t = this.roundTime; g.frozen = false; g.noFire = false; g.sound2d(['round_start', 0.5]); g.center(['行动！', '', 1.2]); }
       return;
     }
     if (this.phase === 'post') {
@@ -1067,12 +1199,12 @@ class ModeComp {
     const d = g.dropWeapon(a, null, true);
     B.dropped = true; B.carrier = null; B.drop = d; B.pos.copy(a.pos);
     g.later(1.5, () => { if (B.drop && B.drop.rest) B.pos.copy(B.drop.pos); });
-    if (g.player.team === 'T') HUD.center('炸弹已掉落', '', 2);
+    g.center((P) => P.team === 'T' ? ['炸弹已掉落', '', 2] : null);
   }
   pickupBomb(a) {
-    const B = this.bomb; if (!B) return;
+    const g = this.g, B = this.bomb; if (!B) return;
     a.inv.c4 = true; B.dropped = false; B.carrier = a; B.drop = null;
-    if (a.isPlayer) { HUD.center('你捡起了 C4', '', 2); Sound.play('magin', { vol: 0.4 }); }
+    g.center((P) => P === a ? ['你捡起了 C4', '', 2] : null); a.sfx('magin', 0.4);
     if (a.isBot) {
       const site = this.tSite || 'A', s = this.g.map.sites[site];
       a.brain.task = { type: 'route', pts: [s.center.clone()], i: 0, then: { type: 'plant', pos: s.center.clone(), urgent: true } };
@@ -1081,15 +1213,12 @@ class ModeComp {
   plantBomb(a, site) {
     const g = this.g, B = this.bomb;
     B.planted = true; B.dropped = false; B.carrier = null; B.timer = 40; B.beepT = 0; B.site = site;
-    B.pos.set(a.pos.x, a.pos.y, a.pos.z);
-    const m = Models.thirdPerson('c4');
-    m.group.position.set(B.pos.x, B.pos.y + 0.03, B.pos.z); m.group.rotation.y = a.yaw;
-    g.scene.add(m.group); this.bombMesh = m.group;
-    this.bombLight = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.02, 0.02) }));
-    this.bombLight.position.set(0.0, 0.1, -0.03); m.group.add(this.bombLight);
+    B.pos.set(a.pos.x, a.pos.y, a.pos.z); B.yaw = a.yaw;
+    const m = g.bombModel(B.pos, a.yaw);
+    this.bombMesh = m.group; this.bombLight = m.light;
     g.playAt('armed', B.pos, { vol: 0.8, ref: 5 });
     a.money += 300; a.mvpFlag = true;
-    HUD.center('炸弹已安放', 'win-t', 3, `${site} 包点 · 40 秒后爆炸`);
+    g.center(['炸弹已安放', 'win-t', 3, `${site} 包点 · 40 秒后爆炸`]);
     // 机器人：CT 回防拆弹，T 守包
     const cts = g.actors.filter((x) => x.isBot && x.alive && x.team === 'CT').sort((p, q) => p.pos.distanceTo(B.pos) - q.pos.distanceTo(B.pos));
     cts.forEach((x, i) => { x.brain.task = i === 0 || Math.random() < 0.5 ? { type: 'defuse', pos: B.pos.clone(), urgent: i === 0 } : { type: 'hold', pos: B.pos.clone().add(_g1.set(rand(-4, 4), 0, rand(-4, 4))), look: B.pos.clone().add(_g1.set(0, 1, 0)) }; });
@@ -1100,18 +1229,13 @@ class ModeComp {
   explodeBomb() {
     const g = this.g, B = this.bomb;
     B.exploded = true;
-    Effects.explosion(B.pos); Effects.explosion(B.pos.clone().add(_g1.set(0, 1.5, 0)));
-    g.playAt('c4boom', B.pos, { vol: 2.0, ref: 25, roll: 0.5, rev: 0.8 });
-    Effects.light(B.pos.clone().add(_g1.set(0, 2, 0)), 90, 0.8, 0xffa040, 45);
+    g.c4Fx(B.pos);
     for (const a of g.actors) {
       if (!a.alive) continue;
       const d = a.pos.distanceTo(B.pos);
       const dmg = 500 * Math.exp(-(d * d) / (2 * 8.5 * 8.5));
       if (dmg > 1) g.applyDamage(a, null, dmg, 'chest', { armorPen: 0.85, type: 'c4', name: 'C4' }, _g2.subVectors(a.pos, B.pos).normalize(), a.pos, false);
     }
-    const dc = g.camera.position.distanceTo(B.pos);
-    g.shake = clamp(2 - dc / 30, 0.3, 2);
-    if (dc < 25) { g.flashAmt = Math.max(g.flashAmt, clamp(1 - dc / 25, 0, 0.8)); g.flashHold = 0.1; Sound.deafen(clamp(1 - dc / 30, 0.2, 0.9), 2.5); }
     if (this.bombMesh) this.bombMesh.visible = false;
     this.endRound('T', 'bomb');
   }
@@ -1138,17 +1262,16 @@ class ModeComp {
     if (mvp) mvp.mvp++;
     for (const a of g.actors) a.mvpFlag = false;
     const why = { elim: '全歼敌方', time: '时间耗尽', bomb: '目标已摧毁', defuse: '炸弹已拆除' }[reason];
-    HUD.center(winner === 'CT' ? '反恐精英获胜' : '恐怖分子获胜', winner === 'CT' ? 'win-ct' : 'win-t', 5, `${why}${mvp ? ' · 本局 MVP：' + mvp.name : ''}`);
-    Sound.play(winner === g.player.team ? 'round_win' : 'round_lose', { vol: 0.55 });
+    g.center([winner === 'CT' ? '反恐精英获胜' : '恐怖分子获胜', winner === 'CT' ? 'win-ct' : 'win-t', 5, `${why}${mvp ? ' · 本局 MVP：' + mvp.name : ''}`]);
+    g.sound2d((a) => [winner === a.team ? 'round_win' : 'round_lose', 0.55]);
     g.noFire = false;
   }
   finish() {
     const g = this.g;
     this.phase = 'over'; g.over = true; g.frozen = true; g.noFire = true;
     const w = this.score.CT > this.score.T ? 'CT' : 'T';
-    const me = g.player.team === w;
-    HUD.center(me ? '胜利！' : '失败', w === 'CT' ? 'win-ct' : 'win-t', 9, `${w === 'CT' ? '反恐精英' : '恐怖分子'} ${this.score[w]} : ${this.score[w === 'CT' ? 'T' : 'CT']}`);
-    Sound.play(me ? 'round_win' : 'round_lose', { vol: 0.6 });
+    g.center((P) => [P.team === w ? '胜利！' : '失败', w === 'CT' ? 'win-ct' : 'win-t', 9, `${w === 'CT' ? '反恐精英' : '恐怖分子'} ${this.score[w]} : ${this.score[w === 'CT' ? 'T' : 'CT']}`]);
+    g.sound2d((a) => [a.team === w ? 'round_win' : 'round_lose', 0.6]);
   }
   onKill(v, k) { void v; void k; }
   dispose() { this.clearBomb(); }

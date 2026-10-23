@@ -189,6 +189,7 @@ const HUD = (() => {
       if (S.showFps) {
         const sp = Math.round(a.hspeed() / U);
         let s = `${g.fps.toFixed(0)} fps   ${sp} u/s`;
+        if (g.client) s += g.net.rtt != null ? `   延迟 ${g.net.rtt}ms` : '   连接中…';
         if (md.id === 'range') s += `\n散布 ${a.inaccuracy().toFixed(1)} mrad\n后坐序号 ${a.recoilIdx.toFixed(1)}\n${a.sliding ? '滑铲中' : a.sprinting ? '冲刺' : a.ducked ? '下蹲' : a.onGround ? '' : '空中'}`;
         setText('netgraph', s);
       } else setText('netgraph', '');
@@ -251,7 +252,7 @@ const HUD = (() => {
       show('scoreboard', on);
       if (!on) return;
       const md = g.mode, P = g.player;
-      const row = (a) => `<tr class="${a === P ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td><span class="c${a.team}">${a.name}</span>${a.inv.c4 && a.team === P.team ? ' 💣' : ''}${a.inv.defuser && a.team === P.team ? ' ✂' : ''}</td><td class="n">${a.kills}</td><td class="n">${a.assists}</td><td class="n">${a.deaths}</td><td class="n">${'★'.repeat(Math.min(a.mvp, 5))}${a.mvp > 5 ? a.mvp : ''}</td><td class="n">${a.team === P.team && !md.infiniteMoney ? '$' + a.money : ''}</td><td class="n">${a.isBot ? 'BOT' : '本机'}</td></tr>`;
+      const row = (a) => `<tr class="${a === P ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td><span class="c${a.team}">${a.name}</span>${a.inv.c4 && a.team === P.team ? ' 💣' : ''}${a.inv.defuser && a.team === P.team ? ' ✂' : ''}</td><td class="n">${a.kills}</td><td class="n">${a.assists}</td><td class="n">${a.deaths}</td><td class="n">${'★'.repeat(Math.min(a.mvp, 5))}${a.mvp > 5 ? a.mvp : ''}</td><td class="n">${a.team === P.team && !md.infiniteMoney ? '$' + a.money : ''}</td><td class="n">${a.isBot ? 'BOT' : a.ping != null ? a.ping + 'ms' : g.net ? (a === P ? '你' : '玩家') : '本机'}</td></tr>`;
       const tbl = (t) => {
         const list = g.actors.filter((x) => x.team === t).sort((x, y) => y.kills - x.kills || x.deaths - y.deaths);
         return `<h3><span class="c${t}">${t === 'CT' ? '反恐精英' : '恐怖分子'}</span><span class="c${t}">${md.score ? md.score[t] : ''}</span></h3><table><tr><th>玩家</th><th class="n">击杀</th><th class="n">助攻</th><th class="n">死亡</th><th class="n">MVP</th><th class="n">金钱</th><th class="n">延迟</th></tr>${list.map(row).join('')}</table>`;

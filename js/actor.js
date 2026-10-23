@@ -20,6 +20,8 @@ class Actor {
     this.game = game;
     this.id = ++ACTOR_SEQ;
     this.name = o.name; this.team = o.team; this.isBot = !!o.isBot; this.isPlayer = !!o.isPlayer;
+    // 联机：remote = 房主侧代表加入者的角色（位置来自对方本机模拟），pid = 对方连接 id
+    this.remote = !!o.remote; this.pid = o.pid || 0; this.spawnSeq = 0; this.inq = []; this.viewT = null; this.ping = null; this._vy = 0;
     this.pos = new THREE.Vector3(); this.prevPos = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.renderPos = new THREE.Vector3();
     this.yaw = 0; this.pitch = 0;
@@ -30,7 +32,7 @@ class Actor {
     this.stamina = 0; this.velMod = 1; this.landInacc = 0; this.stepOffset = 0; this.stepDist = 0;
     this.hp = 100; this.armor = 0; this.helmet = false; this.alive = false;
     this.money = 800; this.kills = 0; this.deaths = 0; this.assists = 0; this.mvp = 0; this.roundKills = 0; this.damageBy = new Map();
-    this.inv = { primary: null, secondary: null, knife: new WeaponInst(this.isPlayer ? (Settings.data.knife === 'knife' ? 'knife' : 'butterfly') : (Math.random() < 0.3 ? 'butterfly' : 'knife')), nades: { he: 0, flash: 0, smoke: 0 }, c4: false, defuser: false };
+    this.inv = { primary: null, secondary: null, knife: new WeaponInst(this.isPlayer ? (Settings.data.knife === 'knife' ? 'knife' : 'butterfly') : this.remote ? (o.knife === 'knife' ? 'knife' : 'butterfly') : (Math.random() < 0.3 ? 'butterfly' : 'knife')), nades: { he: 0, flash: 0, smoke: 0 }, c4: false, defuser: false };
     this.slot = 'knife'; this.lastSlot = 'knife'; this.weapon = this.inv.knife; this.nadeId = 'he';
     this.drawEnd = 0; this.nextFire = 0; this.reloadEnd = 0; this.reloading = false;
     this.recoilIdx = 0; this.lastShot = -9; this.fireInacc = 0; this.recoilP = 0; this.recoilY = 0;
@@ -62,7 +64,7 @@ class Actor {
   // ================= 出生 / 装备 =================
   spawnAt(p, yaw) {
     this.pos.copy(p); this.prevPos.copy(p); this.renderPos.copy(p); this.vel.set(0, 0, 0);
-    this.yaw = yaw; this.pitch = 0;
+    this.yaw = yaw; this.pitch = 0; this.spawnSeq++;
     this.hp = 100; this.alive = true; this.ducked = false; this.duckAmt = 0; this.sliding = false; this.slideAmt = 0;
     this.velMod = 1; this.stamina = 0; this.stepOffset = 0; this.landInacc = 0; this.fireInacc = 0; this.recoilIdx = 0;
     this.recoilP = this.recoilY = this.punchP = this.punchY = this.aimPunchP = this.aimPunchY = 0;
@@ -119,7 +121,7 @@ class Actor {
     this.recoilIdx = 0;
     this.events.push({ t: 'draw', id: w.id });
     if (this.model) this.model.setWeapon(w.id);
-    if (this.isPlayer && !instant) Sound.play('deploy', { vol: 0.35 });
+    if (!instant) this.sfx('deploy', 0.35);
     return true;
   }
   quickSwitch() { if (!this.switchTo(this.lastSlot)) { this.switchTo(this.inv.primary ? 'primary' : this.inv.secondary ? 'secondary' : 'knife'); } }
@@ -359,13 +361,54 @@ class Actor {
 
   footstep(s) {
     const mat = this.groundBox ? (MATS[this.groundBox.mat] || MATS.sand).step : 'sand';
-    if (this.isPlayer) Sound.play('step_' + mat, { vol: 0.28 * (this.sprinting ? 1.2 : 1), rev: 0.05 });
-    else this.game.playAt('step_' + mat, this.pos, { vol: 1.1, ref: 2.5, roll: 1.4, maxDist: 32, rev: 0.05 });
+    const o = { vol: 1.1, ref: 2.5, roll: 1.4, maxDist: 32, rev: 0.05, src: this.id };
+    if (this.isPlayer) { Sound.play('step_' + mat, { vol: 0.28 * (this.sprinting ? 1.2 : 1), rev: 0.05 }); this.game.emitSnd('step_' + mat, this.pos, o); }
+    else this.game.playAt('step_' + mat, this.pos, o);
     this.game.noise(this, this.pos, this.sprinting ? 26 : 20);
   }
   sound(name, vol, refVol) {
-    if (this.isPlayer) Sound.play(name, { vol });
-    else this.game.playAt(name, this.pos, { vol: refVol, ref: 2.5, roll: 1.4, maxDist: 30 });
+    const o = { vol: refVol, ref: 2.5, roll: 1.4, maxDist: 30, src: this.id, pv: vol };
+    if (this.isPlayer) { Sound.play(name, { vol }); this.game.emitSnd(name, this.pos, o); }
+    else this.game.playAt(name, this.pos, o);
+  }
+  // 只给操作者自己听的 2D 提示音；远端玩家转发给对方
+  sfx(name, vol, rate) {
+    if (this.isPlayer) Sound.play(name, rate ? { vol, rate } : { vol });
+    else if (this.remote) this.events.push({ t: 's2', n: name, v: vol, r: rate });
+  }
+
+  // ================= 联机（房主侧的远端玩家） =================
+  // 位置 / 姿态照搬加入者本机模拟的结果，顺带补出跳跃、落地、滑铲的声音
+  netApply(m) {
+    const wasGround = this.onGround, wasSlide = this.sliding, vy = this._vy;
+    this.pos.set(m.p[0], m.p[1], m.p[2]); this.vel.set(m.v[0], m.v[1], m.v[2]);
+    this.yaw = wrapAngle(m.yw); this.pitch = clamp(m.pt, -89 * DEG, 89 * DEG);
+    const f = m.f;
+    this.ducked = !!(f & 1); this.sliding = !!(f & 2); this.onGround = !!(f & 4); this.sprinting = !!(f & 8); this.sprintRecover = f & 16 ? 0.05 : 0;
+    this.duckAmt = clamp(m.da, 0, 1); this.slideAmt = clamp(m.sa, 0, 1); this.landInacc = Math.max(0, m.li || 0);
+    if (wasGround && !this.onGround && this.vel.y > 1) this.sound('jump', 0.3, 0.5);
+    if (!wasGround && this.onGround && -vy > 2) this.sound('land', clamp(-vy / 8, 0.2, 0.8), 0.6);
+    if (this.sliding && !wasSlide) { this.sound('slidemove', 0.55, 0.8); this.game.noise(this, this.pos, 16); }
+    this._vy = this.vel.y;
+  }
+  // 代替 simulate：只推进计时器和脚步声（机器人靠脚步声“听见”人）
+  netSim(dt) {
+    if (!this.alive) return;
+    this.spawnProtect = Math.max(0, this.spawnProtect - dt);
+    this.velMod = Math.min(1, this.velMod + dt * 0.5);
+    if (this.blind > 0) this.blind = Math.max(0, this.blind - dt);
+    if (this.onGround && !this.sliding) {
+      const s = this.hspeed();
+      this.stepDist += s * dt;
+      if (this.stepDist > (this.sprinting ? 2.4 : 2.0)) {
+        this.stepDist = 0;
+        if (s > this.def.speed * 0.6 && !this.ducked && !this.cmd.walk) {
+          const h = this.game.world.raycast(this.pos.x, this.pos.y + 0.1, this.pos.z, 0, -1, 0, 0.5, this._rg || (this._rg = {}));
+          this.groundBox = h ? h.box : null;
+          this.footstep(s);
+        }
+      }
+    }
   }
 
   // ================= 武器 =================
@@ -415,13 +458,13 @@ class Actor {
     if ((c.reload || (w.mag === 0 && c.attackPressed)) && !this.reloading && w.mag < def.mag && (w.reserve > 0 || g.infiniteAmmo)) this.startReload();
     if (c.attack2Pressed && def.scope && !this.reloading) {
       this.scoped = (this.scoped + 1) % 3; this.rezoom = 0; this.zoomT = 0;
-      if (this.isPlayer) Sound.play('dry', { vol: 0.25, rate: 1.6 });
+      this.sfx('dry', 0.25, 1.6);
     }
     const canFire = !this.reloading && now >= this.nextFire && this.sprintRecover <= 0 && !this.sprinting && !g.noFire;
     const trigger = def.auto ? c.attack : c.attackPressed;
     if (trigger && canFire) {
       if (w.mag > 0) this.fire(now);
-      else if (c.attackPressed) { if (this.isPlayer) Sound.play('dry', { vol: 0.5 }); this.nextFire = now + 0.2; }
+      else if (c.attackPressed) { this.sfx('dry', 0.5); this.nextFire = now + 0.2; }
     }
   }
 
@@ -448,7 +491,10 @@ class Actor {
     this.punchY += rand(-1, 1) * def.viewKick[1];
     if (def.scope && this.scoped) { this.rezoom = this.scoped; this.scoped = 0; }
     const eye = this.eyePos(this._t.b);
-    g.fireBullet(this, eye, dir, def);
+    if (g.net && g.net.host) g.net.emit({ t: 'shot', a: this.id, o: nv(eye), d: nv(dir), w: def.id });
+    // 远端玩家开枪：按对方屏幕上看到的位置判定（延迟补偿）
+    if (this.remote && g.net) g.net.rewind(this, () => g.fireBullet(this, eye, dir, def));
+    else g.fireBullet(this, eye, dir, def);
     g.weaponFired(this, def);
     this.events.push({ t: 'fire', id: def.id, empty: w.mag === 0 });
   }
@@ -459,10 +505,9 @@ class Actor {
     this.reloadEnd = this.game.time + def.reload;
     this.scoped = 0; this.rezoom = 0;
     this.events.push({ t: 'reload', dur: def.reload, empty: this.weapon.mag === 0, id: def.id });
-    if (!this.isPlayer) {
-      this.game.playAt('magout', this.pos, { vol: 0.6, ref: 2, roll: 1.5, delay: def.reload * 0.2, maxDist: 20 });
-      this.game.playAt('magin', this.pos, { vol: 0.6, ref: 2, roll: 1.5, delay: def.reload * 0.62, maxDist: 20 });
-    }
+    const mo = { vol: 0.6, ref: 2, roll: 1.5, delay: def.reload * 0.2, maxDist: 20, src: this.id }, mi = Object.assign({}, mo, { delay: def.reload * 0.62 });
+    if (!this.isPlayer) { this.game.playAt('magout', this.pos, mo); this.game.playAt('magin', this.pos, mi); }
+    else { this.game.emitSnd('magout', this.pos, mo); this.game.emitSnd('magin', this.pos, mi); }
     this.game.noise(this, this.pos, 10);
   }
 
@@ -496,7 +541,7 @@ class Actor {
     if ((c.attack || c.attack2) && !this.nadeHold) {
       this.nadeHold = c.attack ? 1 : 2; this.pinTime = now;
       this.events.push({ t: 'pin' });
-      if (this.isPlayer) Sound.play('pin', { vol: 0.5 });
+      this.sfx('pin', 0.5);
     }
     if (this.nadeHold) {
       if (c.attack && c.attack2) this.nadeHold = 3;

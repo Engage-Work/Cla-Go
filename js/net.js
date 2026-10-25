@@ -26,14 +26,14 @@ const fxDec = (x) => (x && x.V ? vn(x.V) : x);
 // ======================================================================
 class NetConn {
   constructor(url) { this.url = url; this.ws = null; this.id = 0; this.role = null; this.onmsg = null; this.onclose = null; }
-  open(role, name) {
+  open(role, name, timeoutMs = 6000) {
     return new Promise((resolve, reject) => {
       let ws;
       try { ws = new WebSocket(this.url); } catch (e) { reject(new Error('Could not connect: ' + e.message)); return; }
       this.ws = ws;
       let done = false;
       const fail = (msg) => { if (!done) { done = true; reject(new Error(msg)); } };
-      const timer = setTimeout(() => { fail('Connection timed out. Check the server address and your firewall'); try { ws.close(); } catch (e) { /* ignore */ } }, 6000);
+      const timer = setTimeout(() => { fail('Connection timed out. Check the server address and your firewall'); try { ws.close(); } catch (e) { /* ignore */ } }, timeoutMs);
       ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', role, name }));
       ws.onerror = () => fail('Cannot reach the multiplayer server (' + this.url + ')');
       ws.onclose = () => { clearTimeout(timer); fail('Connection closed'); if (done && this.onclose) this.onclose(); };
@@ -526,7 +526,10 @@ const Lobby = {
     if (EngagePlay) {
       if (EngagePlay.name) $('lbName').value = String(EngagePlay.name).slice(0, 12);
       this.open();
-      this.connect(EngagePlay.role);
+      this.status('Joining…');
+      // The first frames compile shaders and can hold the main thread for seconds; connecting
+      // after them keeps that stall from running down the connection timeout.
+      requestAnimationFrame(() => requestAnimationFrame(() => this.connect(EngagePlay.role)));
     }
   },
   open() { $('menu').classList.add('hidden'); $('lobby').classList.remove('hidden'); this.render(); },
@@ -546,14 +549,15 @@ const Lobby = {
     const name = this.myName();
     this.status('Connecting…');
     const conn = new NetConn(this.wsUrl());
-    try { await conn.open(role, name); } catch (e) { this.status(e.message, true); return; }
+    // The Engage relay is across the internet rather than the room, so give it longer
+    try { await conn.open(role, name, EngagePlay ? 15000 : 6000); } catch (e) { this.status(e.message, true); return; }
     this.conn = conn; this.role = role; this.name = name;
     conn.onmsg = (from, m) => this.onMessage(from, m);
     conn.onclose = () => this.lost('Lost connection to the multiplayer server');
     if (role === 'host') {
       this.players = [{ pid: conn.id, name, team: Engine.opts.team || 'CT', host: true }];
       this.ctx = null;
-      this.status('Room created. Have your friends open the game at the same address and click "Join Room"');
+      this.status(EngagePlay ? 'Match open. Invite people from Engage' : 'Room created. Have your friends open the game at the same address and click "Join Room"');
     } else {
       this.players = []; this.hostIn = false;
       conn.send({ t: 'info', knife: Settings.data.knife });

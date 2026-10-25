@@ -9,7 +9,7 @@ const HUD = (() => {
   let crossKey = '', radarT = 0, game = null;
   const cache = {};
   const feed = [];
-  let buyOpen = false, buyCat = -1;
+  let buyOpen = false, buyCat = -1, buyCats = [];
   let centerT = 0, hitT = 0;
 
   function setText(id, v) { if (cache[id] !== v) { cache[id] = v; E[id].textContent = v; } }
@@ -29,8 +29,10 @@ const HUD = (() => {
       E.buymenu.addEventListener('pointerdown', (e) => {
         if (!buyOpen || !game || e.button !== 0) return;
         const it = e.target.closest && e.target.closest('[data-buy]');
-        if (it) game.buy(game.player, it.dataset.buy, true);
+        if (it) { e.preventDefault(); game.buy(game.player, it.dataset.buy, true); }
       });
+      // Close on click (after mouseup) so the press that closes the menu can never reach the gun
+      E.buymenu.addEventListener('click', (e) => { if (buyOpen && e.target.closest && e.target.closest('[data-close]')) api.closeBuy(true); });
     },
     bind(g) { game = g; feed.length = 0; E.killfeed.innerHTML = ''; for (const k in cache) delete cache[k]; crossKey = ''; api.closeBuy(false); },
     get buyOpen() { return buyOpen; },
@@ -268,10 +270,12 @@ const HUD = (() => {
     },
 
     // ---------------- Buy menu ----------------
+    // Built once per opening (only your side's items), then only classes and labels change, so the
+    // nodes under the cursor stay put and clicks are never lost to a re-render.
     openBuy(g) {
       buyOpen = true; buyCat = -1;
-      show('buymenu', true);
       api.renderBuy(g);
+      show('buymenu', true);
       Input.freeCursor();
     },
     // resume: the player is going back to the match (relock the pointer); otherwise it's a teardown
@@ -282,27 +286,59 @@ const HUD = (() => {
     },
     renderBuy(g) {
       const P = g.player, md = g.mode;
-      const cols = BUY_MENU.map((cat, ci) => {
-        const items = cat.items.map((id, ii) => {
-          const it = WEAPONS[id] || EQUIP[id];
-          const st = g.buyState(P, id);
-          return `<div class="it ${st.ok ? '' : 'no'} ${st.own ? 'own' : ''} ${buyCat === ci ? 'hot' : ''}" data-buy="${id}"><div class="nm">${it.name}</div><div class="pr">${md.infiniteMoney ? 'Free' : '$' + it.price}</div><div class="k">${ci + 1}-${ii + 1}</div></div>`;
-        }).join('');
-        return `<div class="col"><h4>${ci + 1}. ${cat.title}</h4>${items}</div>`;
-      }).join('');
-      setHTML('buymenu', `<div class="bm"><div class="bmh"><div class="t">Buy Menu</div><div class="m">${md.infiniteMoney ? '$ ∞' : '$' + P.money}</div></div><div class="cols">${cols}</div><div class="foot">Click to buy, or press number keys to pick a category + item · B / Esc to close · ${md.buyTimeLeft ? 'Buy time left: ' + Math.ceil(md.buyTimeLeft()) + 's' : ''}</div></div>`);
+      buyCats = BUY_MENU.map((cat) => ({ title: cat.title, items: cat.items.filter((id) => { const it = WEAPONS[id] || EQUIP[id]; return !it.team || it.team === P.team; }) }));
+      const role = (id) => {
+        const d = WEAPONS[id];
+        if (!d) return id === 'defuser' ? 'Defuses the bomb in 5s instead of 10s' : id === 'helmet' ? 'Body armor and a helmet against headshots' : 'Body armor';
+        if (d.type === 'grenade') return id === 'he' ? 'Explosive damage' : id === 'flash' ? 'Blinds anyone looking at it' : 'Blocks vision';
+        return { pistol: 'Pistol', smg: 'SMG', rifle: 'Rifle', sniper: 'Sniper rifle' }[d.type] + ' · ' + d.mag + ' rounds';
+      };
+      const cols = buyCats.map((cat, ci) => `<div class="col" data-cat="${ci}"><h4><kbd>${ci + 1}</kbd>${cat.title}</h4>` + cat.items.map((id, ii) => {
+        const it = WEAPONS[id] || EQUIP[id];
+        return `<button class="it" tabindex="-1" data-buy="${id}"><kbd>${ii + 1}</kbd><span class="nm">${it.name}</span><span class="pr"></span><span class="rl">${role(id)}</span><span class="st"></span></button>`;
+      }).join('') + '</div>').join('');
+      E.buymenu.innerHTML = `<div class="bm"><div class="bmh"><div class="t">Buy</div><div class="bt"></div><div class="m"></div><button class="x" tabindex="-1" data-close title="Close (B or Esc)">Close <kbd>B</kbd></button></div>`
+        + `<div class="cols">${cols}</div><div class="foot"></div></div>`;
+      E.bm = { cols: E.buymenu.querySelectorAll('.col'), items: E.buymenu.querySelectorAll('[data-buy]'), money: E.buymenu.querySelector('.m'), time: E.buymenu.querySelector('.bt'), foot: E.buymenu.querySelector('.foot') };
+      for (const k in cache) if (k.startsWith('bm')) delete cache[k];
+      api.updateBuyState(g);
+    },
+    updateBuyState(g) {
+      const P = g.player, md = g.mode, B = E.bm;
+      const put = (k, el, v, html) => { if (cache[k] !== v) { cache[k] = v; if (html) el.innerHTML = v; else el.textContent = v; } };
+      put('bmMoney', B.money, md.infiniteMoney ? '$ ∞' : '$' + P.money);
+      const bt = md.buyTimeLeft ? Math.ceil(md.buyTimeLeft()) : null;
+      put('bmTime', B.time, bt == null ? '' : 'Buy time ' + fmtTime(bt));
+      put('bmFoot', B.foot, buyCat < 0
+        ? 'Click an item to buy it · Quick buy: a category number, then an item number · <kbd>B</kbd> or <kbd>Esc</kbd> closes'
+        : `<b>${buyCats[buyCat].title}</b>: press <kbd>1</kbd>–<kbd>${buyCats[buyCat].items.length}</kbd> to buy · <kbd>0</kbd> to go back · <kbd>B</kbd> or <kbd>Esc</kbd> closes`, true);
+      B.cols.forEach((c, ci) => { const v = buyCat < 0 ? 'col' : buyCat === ci ? 'col hot' : 'col dim', k = 'bmCol' + ci; if (cache[k] !== v) { cache[k] = v; c.className = v; } });
+      for (const el of B.items) {
+        const id = el.dataset.buy, st = g.buyState(P, id), it = WEAPONS[id] || EQUIP[id];
+        let price = st.price; if (id === 'helmet' && P.armor >= 100 && !P.helmet && !md.infiniteMoney) price = 350;
+        const state = st.own ? 'own' : st.ok ? 'ok' : !md.infiniteMoney && P.money < price ? 'poor' : 'max';
+        const label = state === 'own' ? 'Owned' : state === 'poor' ? `Need $${price - P.money} more` : state === 'max' ? (it.type === 'grenade' ? 'Grenade limit' : 'Unavailable') : '';
+        const k = 'bmIt' + id, v = state + label + price;
+        if (cache[k] === v) continue;
+        cache[k] = v;
+        el.className = 'it ' + state; el.setAttribute('aria-disabled', String(state !== 'ok'));
+        el.querySelector('.st').textContent = label;
+        el.querySelector('.pr').textContent = md.infiniteMoney ? 'Free' : '$' + price;
+      }
     },
     updateBuy(g) {
       if (!buyOpen) return;
       if (!(g.mode.canBuy && g.mode.canBuy(g.player)) || !g.player.alive) { api.closeBuy(true); return; }
-      api.renderBuy(g);
+      api.updateBuyState(g);
     },
     buyKey(g, n) {
-      if (buyCat < 0) { if (n >= 1 && n <= BUY_MENU.length) { buyCat = n - 1; Sound.play('ui_click'); } return; }
-      const id = BUY_MENU[buyCat].items[n - 1];
-      if (id) g.buy(g.player, id, true);
+      if (buyCat < 0) { if (n >= 1 && n <= buyCats.length) { buyCat = n - 1; Sound.play('ui_click'); } return; }
+      const id = buyCats[buyCat].items[n - 1];
+      if (!id) { Sound.play('ui_deny'); return; }
+      g.buy(g.player, id, true);
       buyCat = -1;
     },
+    buyBack() { if (buyCat >= 0) { buyCat = -1; Sound.play('ui_click'); } },
   };
   return api;
 })();

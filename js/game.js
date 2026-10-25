@@ -649,6 +649,7 @@ class Game {
     if (ui) {
       c.attack = false; c.attack2 = false;
       for (let n = 1; n <= 6; n++) if (I.wasPressed('Digit' + n)) HUD.buyKey(this, n);
+      if (I.wasPressed('Digit0') || I.wasPressed('Backspace')) HUD.buyBack();
       if (I.wasPressed('Escape')) HUD.closeBuy(true);
     } else {
       c.attack = I.mouse[0]; c.attackPressed = I.mPressed[0];

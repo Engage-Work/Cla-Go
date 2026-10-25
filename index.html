@@ -20,7 +20,7 @@
   <div id="topleft">
     <div id="radarWrap"><canvas id="radar" width="400" height="400"></canvas><div id="radarLabel"></div></div>
     <div id="money">$800</div>
-    <div id="buyhint" class="hidden">Press <b>B</b> to buy</div>
+    <div id="buyhint" class="hidden"></div>
   </div>
 
   <div id="topbar">
@@ -45,6 +45,7 @@
   <div id="netgraph"></div>
   <div id="deathinfo" class="hidden"></div>
   <div id="spectate" class="hidden"></div>
+  <div id="intro" class="hidden"></div>
 </div>
 
 <div id="scoreboard" class="hidden"></div>
@@ -63,7 +64,7 @@
         <div class="ct">Demolition</div><div class="cd">5v5 rounds · Economy · Plant / defuse C4 · First to 9</div>
       </div>
       <div class="card" data-mode="tdm">
-        <div class="ct">Team Deathmatch</div><div class="cd">Instant respawn · Free buys · First to 60 kills</div>
+        <div class="ct">Team Deathmatch</div><div class="cd">Instant respawn · Free buys · First to 50 kills</div>
       </div>
       <div class="card" data-mode="range">
         <div class="ct">Firing Range</div><div class="cd">Moving targets · Recoil practice · Live speed / spread readout</div>
@@ -75,7 +76,9 @@
       <div class="opt"><label>Team size</label><div class="seg" id="optSize"><b data-v="1">1</b><b data-v="2">2</b><b data-v="3">3</b><b data-v="4">4</b><b data-v="5" class="on">5</b></div></div>
     </div>
     <div class="actions">
-      <button id="btnStart" class="primary">Play</button>
+      <button id="btnStart" class="primary play"><span class="pl">Play</span><span class="ps" id="playSub">Demolition vs bots</span></button>
+    </div>
+    <div class="actions secondary">
       <button id="btnNet">Multiplayer</button>
       <button id="btnSettings">Settings</button>
       <button id="btnHelp">Controls</button>

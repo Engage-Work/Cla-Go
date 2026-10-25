@@ -40,7 +40,15 @@ button { font-family: var(--font); }
 #money { margin-top: 8px; font-size: 22px; font-weight: 600; color: #a5ff9a; letter-spacing: .5px; }
 #money.flash { animation: moneyflash .6s; }
 @keyframes moneyflash { 0% { color: #fff; transform: scale(1.12); } 100% { color: #a5ff9a; transform: scale(1); } }
-#buyhint { margin-top: 4px; font-size: 13px; color: var(--dim); }
+#buyhint { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 4px 10px 4px 5px; font-size: 14px; background: rgba(255,180,58,.16); border: 1px solid rgba(255,180,58,.45); border-radius: 4px; font-variant-numeric: tabular-nums; }
+#buyhint kbd { border-color: var(--acc); color: #ffd48a; }
+#intro { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: min(720px, 92vw); padding: 14px 18px 12px; background: rgba(10,12,14,.78); border: 1px solid var(--line); border-radius: 6px; text-align: center; transition: opacity .5s; }
+#intro.out { opacity: 0; }
+#intro .side { font-size: 13px; letter-spacing: 3px; text-transform: uppercase; }
+#intro .obj { margin: 6px 0 10px; font-size: 16px; line-height: 1.45; }
+#intro .keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: 13px; color: #d6d0c4; }
+#intro .keys span { white-space: nowrap; }
+#intro .hide { margin-top: 10px; font-size: 12px; color: var(--dim); }
 
 #topbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 0; }
 #topbar .side { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--hud); }
@@ -161,6 +169,11 @@ button { font-family: var(--font); }
 .seg b:hover { background: rgba(255,255,255,.12); }
 .seg b.on { background: var(--acc); color: #1a1206; font-weight: 600; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.actions.secondary { margin-top: 10px; }
+.actions.secondary button { padding: 9px 18px; font-size: 14px; }
+.actions button.play { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 280px; padding: 13px 26px 12px; }
+.actions button.play .pl { font-size: 22px; letter-spacing: 3px; text-transform: uppercase; }
+.actions button.play .ps { font-size: 13px; font-weight: 600; letter-spacing: .5px; opacity: .75; }
 .actions button, .panel button, .row-actions button { padding: 11px 22px; font-size: 15px; letter-spacing: 1px; border: 1px solid var(--line); border-radius: 5px; background: rgba(255,255,255,.07); color: var(--txt); cursor: pointer; transition: .12s; }
 .actions button:hover, .panel button:hover { background: rgba(255,255,255,.14); }
 button.primary { background: linear-gradient(180deg, #ffc65c, #f29a18); color: #1b1205; border-color: transparent; font-weight: 700; }

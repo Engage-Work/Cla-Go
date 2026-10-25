@@ -245,6 +245,7 @@ const Engine = {
     if (net) { opts.net = net.ctx; $('lobby').classList.add('hidden'); }
     this.game = new Game(this, opts);
     HUD.bind(this.game);
+    if (!HUD.introSeen()) HUD.showIntro(this.game);
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
     $('pause').classList.add('hidden');
@@ -354,14 +355,16 @@ const Engine = {
       el.querySelectorAll('b').forEach((b) => b.addEventListener('click', () => {
         el.querySelectorAll('b').forEach((x) => x.classList.remove('on')); b.classList.add('on');
         self.opts[key] = conv ? conv(b.dataset.v) : b.dataset.v;
+        self.updatePlaySub();
         Sound.init(); Sound.play('ui_click');
       }));
     };
     seg('optTeam', 'team'); seg('optDiff', 'diff'); seg('optSize', 'size', Number);
     document.querySelectorAll('#modeCards .card').forEach((c) => c.addEventListener('click', () => {
       document.querySelectorAll('#modeCards .card').forEach((x) => x.classList.remove('active')); c.classList.add('active');
-      self.opts.mode = c.dataset.mode; Sound.init(); Sound.play('ui_click');
+      self.opts.mode = c.dataset.mode; self.updatePlaySub(); Sound.init(); Sound.play('ui_click');
     }));
+    this.updatePlaySub();
     $('btnStart').addEventListener('click', () => self.startGame());
     $('btnSettings').addEventListener('click', () => self.openSettings());
     $('btnHelp').addEventListener('click', () => $('help').classList.remove('hidden'));
@@ -395,9 +398,17 @@ const Engine = {
       if (!down) return false;
       if (e.code === 'Escape' && !$('settings').classList.contains('hidden')) { $('settings').classList.add('hidden'); return true; }
       if (e.code === 'Escape' && !$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); return true; }
+      // Enter on the main menu plays (a key press counts as the gesture pointer lock needs)
+      if (e.code === 'Enter' && !self.game && !$('menu').classList.contains('hidden') && $('lobby').classList.contains('hidden') && $('settings').classList.contains('hidden') && $('help').classList.contains('hidden')) { self.startGame(); return true; }
       return false;
     };
     this.setTab = 'mouse';
+  },
+  updatePlaySub() {
+    const o = this.opts;
+    const mode = { comp: 'Demolition', tdm: 'Team Deathmatch', range: 'Firing Range' }[o.mode];
+    $('playSub').textContent = o.mode === 'range' ? mode + ' · solo practice'
+      : `${mode} · ${o.team === 'CT' ? 'Defenders' : 'Attackers'} · ${o.size}v${o.size} · ${(DIFFS[o.diff] || DIFFS.normal).label} bots`;
   },
   openSettings() { $('settings').classList.remove('hidden'); this.renderSettings(); },
   SETTINGS_UI: {

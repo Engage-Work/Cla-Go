@@ -627,6 +627,7 @@ class Game {
     const P = this.player, c = P.cmd, I = Input, S = Settings.data;
     const ui = HUD.buyOpen;
     c.jumpPressed = false; c.duckPressed = false; c.attackPressed = false; c.attack2Pressed = false; c.usePressed = false; c.reload = false;
+    if (I.wasPressed('KeyH')) HUD.hideIntro();
     if (I.wasPressed('KeyB') && !this.over) { if (ui) HUD.closeBuy(true); else if (this.mode.canBuy && this.mode.canBuy(P)) HUD.openBuy(this); }
     if (!P.alive) {
       if (I.mPressed[0] || I.wasPressed('Space')) this.nextSpectate(1);

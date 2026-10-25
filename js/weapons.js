@@ -28,10 +28,10 @@ function genPattern(n, step, decay, yawAmp, yawFreq, phase = 0) {
 
 const WEAPONS = {
   knife: {
-    id: 'knife', name: '匕首', short: '刀', slot: 3, type: 'knife', speed: 250 * U, draw: 0.6, price: 0, killReward: 1500, armorPen: 0.85, rangeMod: 1,
+    id: 'knife', name: 'Knife', short: 'Knife', slot: 3, type: 'knife', speed: 250 * U, draw: 0.6, price: 0, killReward: 1500, armorPen: 0.85, rangeMod: 1,
   },
   butterfly: {
-    id: 'butterfly', name: '蝴蝶刀', short: '刀', slot: 3, type: 'knife', speed: 250 * U, draw: 0.6, price: 0, killReward: 1500, armorPen: 0.85, rangeMod: 1,
+    id: 'butterfly', name: 'Butterfly Knife', short: 'Knife', slot: 3, type: 'knife', speed: 250 * U, draw: 0.6, price: 0, killReward: 1500, armorPen: 0.85, rangeMod: 1,
   },
   glock: {
     id: 'glock', name: 'Glock-18', slot: 2, type: 'pistol', team: 'T', price: 200, killReward: 300,
@@ -48,7 +48,7 @@ const WEAPONS = {
     pattern: genPattern(12, 1.05, 0.1, 0.3, 2.1), recoilRecover: 7, viewKick: [1.0, 0.3], tracer: 0, sound: 'usp', vol: 0.7, suppressed: true,
   },
   deagle: {
-    id: 'deagle', name: '沙漠之鹰', slot: 2, type: 'pistol', price: 700, killReward: 300,
+    id: 'deagle', name: 'Desert Eagle', slot: 2, type: 'pistol', price: 700, killReward: 300,
     damage: 63, armorPen: 0.932, rangeMod: 0.81, pen: 0.24, cycle: 0.225, auto: false, mag: 7, reserve: 35,
     reload: 2.2, draw: 1.0, speed: 230 * U,
     spread: 2.0, inaccStand: 6.0, inaccCrouch: 4.0, inaccMove: 45, inaccJump: 300, inaccLand: 90, inaccFire: 55, recovery: 0.65,
@@ -83,25 +83,25 @@ const WEAPONS = {
     pattern: [[0, 0], [0, 0]], recoilRecover: 2, viewKick: [3.6, 0.6], tracer: 1, sound: 'awp', vol: 1.1,
     scope: true, zoom: [40, 12],
   },
-  he: { id: 'he', name: '高爆手雷', short: 'HE', slot: 4, type: 'grenade', price: 300, speed: 245 * U, draw: 0.6, max: 1 },
-  flash: { id: 'flash', name: '闪光弹', short: '闪光', slot: 4, type: 'grenade', price: 200, speed: 245 * U, draw: 0.6, max: 2 },
-  smoke: { id: 'smoke', name: '烟雾弹', short: '烟雾', slot: 4, type: 'grenade', price: 300, speed: 245 * U, draw: 0.6, max: 1 },
-  c4: { id: 'c4', name: 'C4 炸弹', short: 'C4', slot: 5, type: 'c4', speed: 250 * U, draw: 0.8, price: 0 },
+  he: { id: 'he', name: 'HE Grenade', short: 'HE', slot: 4, type: 'grenade', price: 300, speed: 245 * U, draw: 0.6, max: 1 },
+  flash: { id: 'flash', name: 'Flashbang', short: 'Flash', slot: 4, type: 'grenade', price: 200, speed: 245 * U, draw: 0.6, max: 2 },
+  smoke: { id: 'smoke', name: 'Smoke Grenade', short: 'Smoke', slot: 4, type: 'grenade', price: 300, speed: 245 * U, draw: 0.6, max: 1 },
+  c4: { id: 'c4', name: 'C4 Bomb', short: 'C4', slot: 5, type: 'c4', speed: 250 * U, draw: 0.8, price: 0 },
 };
 const GRENADE_ORDER = ['he', 'flash', 'smoke'];
 
 const EQUIP = {
-  kevlar: { id: 'kevlar', name: '防弹衣', price: 650 },
-  helmet: { id: 'helmet', name: '防弹衣+头盔', price: 1000 },
-  defuser: { id: 'defuser', name: '拆弹器', price: 400, team: 'CT' },
+  kevlar: { id: 'kevlar', name: 'Kevlar', price: 650 },
+  helmet: { id: 'helmet', name: 'Kevlar + Helmet', price: 1000 },
+  defuser: { id: 'defuser', name: 'Defuse Kit', price: 400, team: 'CT' },
 };
 
 const BUY_MENU = [
-  { title: '手枪', items: ['glock', 'usp', 'deagle'] },
-  { title: '冲锋枪', items: ['mp9'] },
-  { title: '步枪', items: ['ak47', 'm4a4'] },
-  { title: '狙击枪', items: ['awp'] },
-  { title: '装备 / 投掷物', items: ['kevlar', 'helmet', 'defuser', 'he', 'flash', 'smoke'] },
+  { title: 'Pistols', items: ['glock', 'usp', 'deagle'] },
+  { title: 'SMGs', items: ['mp9'] },
+  { title: 'Rifles', items: ['ak47', 'm4a4'] },
+  { title: 'Snipers', items: ['awp'] },
+  { title: 'Gear & Grenades', items: ['kevlar', 'helmet', 'defuser', 'he', 'flash', 'smoke'] },
 ];
 
 function patternAt(def, idx) {

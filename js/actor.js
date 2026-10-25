@@ -5,8 +5,8 @@
 // ======================================================================
 let ACTOR_SEQ = 0;
 const BOT_NAMES = {
-  CT: ['老鹰', '猎隼', '铁壁', '北极星', '雷霆', '灰狼', '冰川', '堡垒', '利刃'],
-  T: ['沙蝎', '毒蛇', '野狼', '黑曼巴', '赤狐', '鬣狗', '响尾蛇', '秃鹫', '狂沙'],
+  CT: ['Eagle', 'Falcon', 'Bulwark', 'Polaris', 'Thunder', 'Greywolf', 'Glacier', 'Bastion', 'Blade'],
+  T: ['Scorpion', 'Viper', 'Jackal', 'Mamba', 'Fox', 'Hyena', 'Rattler', 'Vulture', 'Dune'],
 };
 
 function newCmd() {

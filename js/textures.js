@@ -436,16 +436,16 @@ const Tex = (() => {
       const keys = Object.keys(DEF);
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i];
-        progress && progress(i / (keys.length + 4), '生成材质 · ' + k);
+        progress && progress(i / (keys.length + 4), 'Generating materials · ' + k);
         await new Promise((r) => setTimeout(r, 0));
         const [ns, fn] = DEF[k];
         this.sets[k] = generate(SIZE, fn, ns * SIZE / 512);
       }
-      progress && progress((keys.length + 1) / (keys.length + 4), '生成角色布料');
+      progress && progress((keys.length + 1) / (keys.length + 4), 'Generating fabrics');
       await new Promise((r) => setTimeout(r, 0));
       this.camo.ct = camo('ct'); this.camo.t = camo('t'); this.camo.dark = camo('dark');
       this.gun = { metal: gunTex('metal'), poly: gunTex('poly') };
-      progress && progress((keys.length + 2) / (keys.length + 4), '生成特效贴图');
+      progress && progress((keys.length + 2) / (keys.length + 4), 'Generating effect textures');
       await new Promise((r) => setTimeout(r, 0));
       this.sprites = sprites();
     },

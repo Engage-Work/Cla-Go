@@ -367,7 +367,7 @@ const MapGen = (() => {
     }
 
     world.build();
-    progress && progress(0.55, '烘焙环境光遮蔽');
+    progress && progress(0.55, 'Baking ambient occlusion');
 
     // ================= 几何生成 =================
     const batches = {};
@@ -520,7 +520,7 @@ const MapGen = (() => {
       totalV += B.n;
     }
     scene.add(group);
-    progress && progress(0.7, '布置道具');
+    progress && progress(0.7, 'Placing props');
 
     // ---------------- 独立道具网格 ----------------
     const P = {

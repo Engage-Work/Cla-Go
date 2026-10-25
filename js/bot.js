@@ -6,10 +6,10 @@
 const DIFFS = {
   // react 反应(s)  turn 转身(°/s)  err 初始瞄准误差(°)  errDecay 误差收敛  head 瞄头概率  spray 压枪程度
   // fov 视野  hear 听觉  strafe 对枪横移  track 跟枪  stopShoot 急停开枪纪律  slide 滑铲倾向  first 首枪额外延迟(s)
-  easy:   { label: '新兵',   react: 0.78, turn: 170, err: 10,  errDecay: 0.9, head: 0.06, spray: 0.12, fov: 100, hear: 0.5,  strafe: 0.2,  track: 0.3,  stopShoot: 0.3,  slide: 0.15, first: 0.25 },
-  normal: { label: '老兵',   react: 0.52, turn: 280, err: 6.5, errDecay: 1.6, head: 0.15, spray: 0.35, fov: 110, hear: 0.72, strafe: 0.45, track: 0.55, stopShoot: 0.65, slide: 0.4,  first: 0.12 },
-  hard:   { label: '精英',   react: 0.34, turn: 440, err: 4.0, errDecay: 2.8, head: 0.3,  spray: 0.62, fov: 120, hear: 0.92, strafe: 0.75, track: 0.78, stopShoot: 0.88, slide: 0.7,  first: 0.05 },
-  cosmic: { label: '宇宙级', react: 0.21, turn: 760, err: 2.2, errDecay: 4.8, head: 0.5,  spray: 0.86, fov: 135, hear: 1.1,  strafe: 1.0,  track: 0.93, stopShoot: 1.0,  slide: 1.0,  first: 0.0 },
+  easy:   { label: 'Recruit',   react: 0.78, turn: 170, err: 10,  errDecay: 0.9, head: 0.06, spray: 0.12, fov: 100, hear: 0.5,  strafe: 0.2,  track: 0.3,  stopShoot: 0.3,  slide: 0.15, first: 0.25 },
+  normal: { label: 'Veteran',   react: 0.52, turn: 280, err: 6.5, errDecay: 1.6, head: 0.15, spray: 0.35, fov: 110, hear: 0.72, strafe: 0.45, track: 0.55, stopShoot: 0.65, slide: 0.4,  first: 0.12 },
+  hard:   { label: 'Elite',   react: 0.34, turn: 440, err: 4.0, errDecay: 2.8, head: 0.3,  spray: 0.62, fov: 120, hear: 0.92, strafe: 0.75, track: 0.78, stopShoot: 0.88, slide: 0.7,  first: 0.05 },
+  cosmic: { label: 'Cosmic', react: 0.21, turn: 760, err: 2.2, errDecay: 4.8, head: 0.5,  spray: 0.86, fov: 135, hear: 1.1,  strafe: 1.0,  track: 0.93, stopShoot: 1.0,  slide: 1.0,  first: 0.0 },
 };
 
 class BotBrain {

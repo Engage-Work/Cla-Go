@@ -10,7 +10,7 @@ const HUD = (() => {
   const cache = {};
   const feed = [];
   let buyOpen = false, buyCat = -1, buyCats = [];
-  let centerT = 0, hitT = 0, introLive = -1;
+  let centerT = 0, hitT = 0, introLive = -1, introMode = '';
 
   function setText(id, v) { if (cache[id] !== v) { cache[id] = v; E[id].textContent = v; } }
   function setHTML(id, v) { if (cache['h' + id] !== v) { cache['h' + id] = v; E[id].innerHTML = v; } }
@@ -37,29 +37,29 @@ const HUD = (() => {
     bind(g) { game = g; feed.length = 0; E.killfeed.innerHTML = ''; for (const k in cache) delete cache[k]; crossKey = ''; api.closeBuy(false); api.hideIntro(true); },
 
     // First-match hint: your side, the objective and the keys. Stays through freeze time, then fades a
-    // few seconds into the round (or on H). Shown once per browser.
+    // few seconds into the round (or on H). Shown once per mode per browser.
     showIntro(g) {
       const P = g.player, md = g.mode, S = Settings.data, ct = P.team === 'CT';
       const obj = md.id === 'comp'
         ? (ct ? 'Stop the attackers from planting the C4 at site A or B. If they plant it, defuse it with <kbd>E</kbd>. Or eliminate them all.'
           : 'Plant the C4 at site A or B (stand on the site with the bomb and hold <kbd>E</kbd>), then protect it until it explodes. Or eliminate the defenders.')
-        : md.id === 'tdm' ? `Respawn and fight: the first team to ${md.limit} kills wins.`
+        : md.id === 'tdm' ? (md.limit ? `Respawn and fight: the first team to ${md.limit} kills wins.` : 'Respawn and fight: the team with the most kills wins.')
         : 'Practice on the targets. Ammo is unlimited and buying is free.';
       const k = (keys, what) => `<span>${keys.map((x) => `<kbd>${x}</kbd>`).join(' ')} ${what}</span>`;
       E.intro.innerHTML = `<div class="side ${ct ? 'cCT' : 'cT'}">You are ${md.id === 'range' ? 'on the range' : ct ? 'a Defender' : 'an Attacker'}</div><div class="obj">${obj}</div>`
         + `<div class="keys">${k(['W', 'A', 'S', 'D'], 'Move')}${k(['Mouse'], 'Aim')}${k(['Click'], 'Fire')}${k(['R'], 'Reload')}${k(['Space'], 'Jump')}${k(['Ctrl'], 'Crouch')}${k(['Shift'], S.moveMode === 'sprint' ? 'Sprint' : 'Walk')}${k(['B'], 'Buy')}${k(['Tab'], 'Scores')}${k(['Esc'], 'Pause')}</div>`
         + '<div class="hide">Press <kbd>H</kbd> to hide</div>';
       E.intro.classList.remove('hidden', 'out');
-      introLive = 0;
+      introLive = 0; introMode = md.id;
     },
     hideIntro(now) {
       if (introLive < 0) { if (now) E.intro.classList.add('hidden'); return; }
       introLive = -1;
-      try { localStorage.setItem('sandstorm_seen_intro', '1'); } catch (e) { /* private mode */ }
+      try { localStorage.setItem('sandstorm_seen_intro_' + introMode, '1'); } catch (e) { /* private mode */ }
       if (now) E.intro.classList.add('hidden');
       else { E.intro.classList.add('out'); setTimeout(() => { if (introLive < 0) E.intro.classList.add('hidden'); }, 600); }
     },
-    introSeen() { try { return localStorage.getItem('sandstorm_seen_intro') === '1'; } catch (e) { return false; } },
+    introSeen(mode) { try { return localStorage.getItem('sandstorm_seen_intro_' + mode) === '1'; } catch (e) { return false; } },
     get buyOpen() { return buyOpen; },
 
     drawCrosshair(extra, hide) {

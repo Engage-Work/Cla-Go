@@ -245,7 +245,7 @@ const Engine = {
     if (net) { opts.net = net.ctx; $('lobby').classList.add('hidden'); }
     this.game = new Game(this, opts);
     HUD.bind(this.game);
-    if (!HUD.introSeen()) HUD.showIntro(this.game);
+    if (!HUD.introSeen(this.game.mode.id)) HUD.showIntro(this.game);
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
     $('pause').classList.add('hidden');

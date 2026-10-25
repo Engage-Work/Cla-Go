@@ -29,14 +29,14 @@ class NetConn {
   open(role, name) {
     return new Promise((resolve, reject) => {
       let ws;
-      try { ws = new WebSocket(this.url); } catch (e) { reject(new Error('无法连接：' + e.message)); return; }
+      try { ws = new WebSocket(this.url); } catch (e) { reject(new Error('Could not connect: ' + e.message)); return; }
       this.ws = ws;
       let done = false;
       const fail = (msg) => { if (!done) { done = true; reject(new Error(msg)); } };
-      const timer = setTimeout(() => { fail('连接超时，确认服务器地址和防火墙'); try { ws.close(); } catch (e) { /* ignore */ } }, 6000);
+      const timer = setTimeout(() => { fail('Connection timed out. Check the server address and your firewall'); try { ws.close(); } catch (e) { /* ignore */ } }, 6000);
       ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', role, name }));
-      ws.onerror = () => fail('连不上联机服务器（' + this.url + '）');
-      ws.onclose = () => { clearTimeout(timer); fail('连接被关闭'); if (done && this.onclose) this.onclose(); };
+      ws.onerror = () => fail('Cannot reach the multiplayer server (' + this.url + ')');
+      ws.onclose = () => { clearTimeout(timer); fail('Connection closed'); if (done && this.onclose) this.onclose(); };
       ws.onmessage = (e) => {
         const s = e.data, i = s.indexOf('|');
         const from = Number(s.slice(0, i));
@@ -404,7 +404,7 @@ class NetClient {
         g.makeRagdoll(v, ev.dir ? vn(ev.dir) : null, ev.g, ev.hs);
         if (v === P) {
           g.playerDied(k && k !== v ? k : null, ev.w, ev.hs, ev.wb);
-          if (g.mode.id === 'tdm') HUD.showDeath(document.getElementById('deathinfo').innerHTML.split('<small>')[0], '3 秒后复活');
+          if (g.mode.id === 'tdm') HUD.showDeath(document.getElementById('deathinfo').innerHTML.split('<small>')[0], 'Respawning in 3s');
         }
         break;
       }
@@ -449,7 +449,7 @@ class NetClient {
 // ======================================================================
 class ModeMirror {
   constructor(g, id) {
-    this.g = g; this.id = id; this.title = id === 'comp' ? '爆破竞技' : '团队死斗';
+    this.g = g; this.id = id; this.title = id === 'comp' ? 'Demolition' : 'Team Deathmatch';
     this.infiniteMoney = id !== 'comp'; this.spectateAllowed = id === 'comp';
     this.score = { CT: 0, T: 0 }; this.phase = 'live'; this.bomb = null; this.tl = null; this.cb = false; this.bt = 0;
     this.bombMesh = null;
@@ -482,13 +482,13 @@ const Lobby = {
   init() {
     let nm = '';
     try { nm = localStorage.getItem(NAME_KEY) || ''; } catch (e) { /* ignore */ }
-    $('lbName').value = nm || '玩家' + Math.floor(Math.random() * 900 + 100);
+    $('lbName').value = nm || 'Player' + Math.floor(Math.random() * 900 + 100);
     const httpPage = location.protocol === 'http:' || location.protocol === 'https:';
     $('lbServer').value = httpPage && !/github\.io$/.test(location.hostname) ? location.host : 'localhost:8080';
     // 从联机服务器打开时，问它要局域网地址，好告诉舍友该开哪个网址
     this.lan = null;
     if (location.protocol === 'http:') fetch('/api/lan').then((r) => r.json()).then((d) => { this.lan = d.ips.map((ip) => `http://${ip}:${d.port}`); this.render(); }).catch(() => {});
-    if (location.protocol === 'https:') $('lbTip').innerHTML = '当前是在线试玩页面（HTTPS），浏览器不允许它连局域网服务器。<br>联机请先在一台电脑上运行 <b>启动联机服务器.cmd</b>，然后两个人都用它显示的地址打开游戏。';
+    if (location.protocol === 'https:') $('lbTip').innerHTML = 'This is the online demo page (HTTPS), and browsers do not let it connect to a LAN server.<br>For multiplayer, first run <b>start-lan-server.cmd</b> (or <b>node server/server.js</b>) on one computer, then have everyone open the address it shows.';
     $('btnNet').addEventListener('click', () => this.open());
     $('lbBack').addEventListener('click', () => this.close());
     $('lbHost').addEventListener('click', () => this.connect('host'));
@@ -518,26 +518,26 @@ const Lobby = {
     if (!s) s = 'localhost:8080';
     return (location.protocol === 'https:' ? 'wss://' : 'ws://') + s + '/ws';
   },
-  myName() { const n = $('lbName').value.trim().slice(0, 12) || '玩家'; try { localStorage.setItem(NAME_KEY, n); } catch (e) { /* ignore */ } return n; },
+  myName() { const n = $('lbName').value.trim().slice(0, 12) || 'Player'; try { localStorage.setItem(NAME_KEY, n); } catch (e) { /* ignore */ } return n; },
 
   async connect(role) {
     if (this.conn) return;
     Sound.init(); Sound.play('ui_click');
     const name = this.myName();
-    this.status('正在连接…');
+    this.status('Connecting…');
     const conn = new NetConn(this.wsUrl());
     try { await conn.open(role, name); } catch (e) { this.status(e.message, true); return; }
     this.conn = conn; this.role = role; this.name = name;
     conn.onmsg = (from, m) => this.onMessage(from, m);
-    conn.onclose = () => this.lost('和联机服务器的连接断开了');
+    conn.onclose = () => this.lost('Lost connection to the multiplayer server');
     if (role === 'host') {
       this.players = [{ pid: conn.id, name, team: Engine.opts.team || 'CT', host: true }];
       this.ctx = null;
-      this.status('房间已创建，等舍友用同一个地址打开游戏并点「加入房间」');
+      this.status('Room created. Have your friends open the game at the same address and click "Join Room"');
     } else {
       this.players = []; this.hostIn = false;
       conn.send({ t: 'info', knife: Settings.data.knife });
-      this.status('已连接，等待房主…');
+      this.status('Connected, waiting for the host…');
     }
     this.render();
   },
@@ -572,7 +572,7 @@ const Lobby = {
         this.broadcast(); this.render();
       } else if (m.t === 'leave') {
         this.players = this.players.filter((p) => p.pid !== m.id);
-        if (this.inGame && Engine.game) { Engine.game.removeRemote(m.id); HUD.center('有玩家离开了对局', '', 2); }
+        if (this.inGame && Engine.game) { Engine.game.removeRemote(m.id); HUD.center('A player left the match', '', 2); }
         this.broadcast(); this.render();
       }
       return;
@@ -615,13 +615,13 @@ const Lobby = {
       if (m.t === 'hostleft') {
         this.hostIn = false; this.players = [];
         if (this.inGame) { this.inGame = false; this.ctx = null; Engine.quitToMenu(true); this.open(); }
-        this.status('房主离开了，等待房主重新创建房间…', true); this.render();
-      } else if (m.t === 'hostup') { this.status('房主已上线'); }
+        this.status('The host left. Waiting for the host to create a new room…', true); this.render();
+      } else if (m.t === 'hostup') { this.status('The host is online'); }
       return;
     }
     if (m.t === 'lobby') {
       this.hostIn = true; this.players = m.players; this.opts = m.opts; this.hostGame = !!m.ing;
-      if (!this.inGame) this.status(m.ing ? '房主正在对局中，可以直接加入' : '在大厅里，等房主开始');
+      if (!this.inGame) this.status(m.ing ? 'A match is in progress. You can join it now' : 'In the lobby, waiting for the host to start');
       this.render(); return;
     }
     if (m.t === 'start') {
@@ -630,7 +630,7 @@ const Lobby = {
       Engine.startGame({ opts: Object.assign({}, m.opts, { team: m.team, name: this.name }), ctx });
       return;
     }
-    if (m.t === 'end') { if (this.inGame) { this.inGame = false; this.ctx = null; Engine.quitToMenu(true); this.open(); this.status('对局结束，回到大厅'); } return; }
+    if (m.t === 'end') { if (this.inGame) { this.inGame = false; this.ctx = null; Engine.quitToMenu(true); this.open(); this.status('Match over, back to the lobby'); } return; }
     if (this.ctx) this.ctx.onMessage(from, m);
   },
 
@@ -643,16 +643,16 @@ const Lobby = {
     $('lbJoinGame').classList.toggle('hidden', !(on && !host && this.hostGame && !this.inGame));
     if (!on) return;
     const O = this.opts;
-    const seg = (k, list) => `<div class="opt"><label>${{ mode: '模式', diff: '机器人难度', size: '每队人数（含玩家，空位补机器人）', ff: '友军伤害' }[k]}</label><div class="seg${host ? '' : ' ro'}">${list.map(([v, l]) => `<b data-k="${k}" data-v="${v}" class="${String(O[k] === true ? '1' : O[k] === false ? '0' : O[k]) === String(v) ? 'on' : ''}">${l}</b>`).join('')}</div></div>`;
-    $('lbOpts').innerHTML = seg('mode', [['tdm', '团队死斗'], ['comp', '爆破竞技']]) +
-      seg('diff', [['easy', '新兵'], ['normal', '老兵'], ['hard', '精英'], ['cosmic', '宇宙级']]) +
-      seg('size', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']]) + seg('ff', [[0, '关'], [1, '开']]);
+    const seg = (k, list) => `<div class="opt"><label>${{ mode: 'Mode', diff: 'Bot skill', size: 'Team size (bots fill in)', ff: 'Friendly fire' }[k]}</label><div class="seg${host ? '' : ' ro'}">${list.map(([v, l]) => `<b data-k="${k}" data-v="${v}" class="${String(O[k] === true ? '1' : O[k] === false ? '0' : O[k]) === String(v) ? 'on' : ''}">${l}</b>`).join('')}</div></div>`;
+    $('lbOpts').innerHTML = seg('mode', [['tdm', 'Team Deathmatch'], ['comp', 'Demolition']]) +
+      seg('diff', [['easy', 'Recruit'], ['normal', 'Veteran'], ['hard', 'Elite'], ['cosmic', 'Cosmic']]) +
+      seg('size', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']]) + seg('ff', [[0, 'Off'], [1, 'On']]);
     const myPid = this.conn.id;
     const col = (team) => this.players.filter((p) => p.team === team).map((p) =>
-      `<div class="lp${p.pid === myPid ? ' me' : ''}">${p.host ? '<i>房主</i>' : ''}${esc(p.name)}${(host || p.pid === myPid) ? `<span class="sw" data-pid="${p.pid}" data-team="${team === 'CT' ? 'T' : 'CT'}">换到 ${team === 'CT' ? 'T' : 'CT'} →</span>` : ''}</div>`).join('') || '<div class="lp empty">（机器人）</div>';
-    $('lbPlayers').innerHTML = `<div class="lt ct"><h4>反恐精英 CT</h4>${col('CT')}</div><div class="lt t"><h4>恐怖分子 T</h4>${col('T')}</div>`;
-    const addr = this.lan && this.lan.length ? this.lan.join(' 或 ') : 'http://' + ($('lbServer').value.trim() || location.host);
-    $('lbRole').textContent = host ? `你是房主 · 舍友在浏览器打开 ${addr} ，点「联机对战」→「加入房间」` : this.hostIn ? '已加入房间 · 设置由房主决定，阵营可以自己换' : '等待房主创建房间…';
+      `<div class="lp${p.pid === myPid ? ' me' : ''}">${p.host ? '<i>Host</i>' : ''}${esc(p.name)}${(host || p.pid === myPid) ? `<span class="sw" data-pid="${p.pid}" data-team="${team === 'CT' ? 'T' : 'CT'}">Switch to ${team === 'CT' ? 'Attackers' : 'Defenders'} →</span>` : ''}</div>`).join('') || '<div class="lp empty">(bots)</div>';
+    $('lbPlayers').innerHTML = `<div class="lt ct"><h4>Defenders</h4>${col('CT')}</div><div class="lt t"><h4>Attackers</h4>${col('T')}</div>`;
+    const addr = this.lan && this.lan.length ? this.lan.join(' or ') : 'http://' + ($('lbServer').value.trim() || location.host);
+    $('lbRole').textContent = host ? `You are the host · Friends: open ${addr} in a browser, then click "Multiplayer" → "Join Room"` : this.hostIn ? 'Joined the room · The host controls match settings, but you can switch sides yourself' : 'Waiting for the host to create a room…';
   },
 };
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

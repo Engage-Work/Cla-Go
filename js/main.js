@@ -4,10 +4,10 @@
 //              菜单与设置、主循环（128 tick 固定步长 + 插值渲染）
 // ======================================================================
 const QUALITY = {
-  low:    { label: '低',   pr: 0.75, shadow: 1024, msaa: 0, bloom: false, fxaa: true },
-  medium: { label: '中',   pr: 1.0,  shadow: 2048, msaa: 0, bloom: true,  fxaa: true },
-  high:   { label: '高',   pr: 1.0,  shadow: 4096, msaa: 4, bloom: true,  fxaa: false },
-  ultra:  { label: '极致', pr: 2.0,  shadow: 4096, msaa: 4, bloom: true,  fxaa: false },
+  low:    { label: 'Low',   pr: 0.75, shadow: 1024, msaa: 0, bloom: false, fxaa: true },
+  medium: { label: 'Medium',   pr: 1.0,  shadow: 2048, msaa: 0, bloom: true,  fxaa: true },
+  high:   { label: 'High',   pr: 1.0,  shadow: 4096, msaa: 4, bloom: true,  fxaa: false },
+  ultra:  { label: 'Ultra', pr: 2.0,  shadow: 4096, msaa: 4, bloom: true,  fxaa: false },
 };
 
 const FinalShader = {
@@ -66,7 +66,7 @@ const Engine = {
   async boot() {
     const S = Settings.data;
     this.forceRun = /[?&]test=1/.test(location.search);
-    await this.step(0.02, '初始化渲染器');
+    await this.step(0.02, 'Initializing renderer');
     const canvas = $('game');
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
     r.outputEncoding = THREE.LinearEncoding;
@@ -92,14 +92,14 @@ const Engine = {
     scene.add(cam);
 
     await Tex.init(S.quality, (p, m) => this.progress(0.04 + p * 0.36, m));
-    await this.step(0.42, '构建地图「炽沙小镇」');
+    await this.step(0.42, 'Building map "Sunscorch"');
     this.world = new World();
     this.map = MapGen.build(this.world, scene, (p, m) => this.progress(0.42 + p * 0.4, m));
-    await this.step(0.83, '生成导航网格');
+    await this.step(0.83, 'Generating navigation mesh');
     this.nav = new NavGrid(this.world);
     const seeds = [...this.map.spawns.T, ...this.map.spawns.CT, ...Object.values(this.map.points)];
     this.nav.build(seeds);
-    await this.step(0.88, '天空与光照');
+    await this.step(0.88, 'Sky and lighting');
     this.setupSky();
     Effects.init(scene, this.world);
     Effects.setFog(scene.fog.color, scene.fog.density);
@@ -108,13 +108,13 @@ const Engine = {
     HUD.init();
     Input.init(canvas);
     this.buildComposer();
-    await this.step(0.93, '预编译着色器');
+    await this.step(0.93, 'Precompiling shaders');
     this.warmup();
-    await this.step(0.97, '合成音效');
+    await this.step(0.97, 'Synthesizing sounds');
     Sound.init();
     const wake = () => { Sound.resume(); Sound.startAmbience(); };
     window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
-    await this.step(1, '完成');
+    await this.step(1, 'Done');
     this.bindUI();
     Lobby.init();
     this.startBgPump();
@@ -122,7 +122,7 @@ const Engine = {
     this.resize();
     $('loading').classList.add('hidden');
     $('menu').classList.remove('hidden');
-    $('verLabel').textContent = `v${VERSION} · 爆发式滑铲 · 经典 FPS 移动物理 · 128 tick · 局域网联机`;
+    $('verLabel').textContent = `v${VERSION} · Burst sliding · Classic FPS movement · 128 tick · LAN multiplayer`;
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
   },
@@ -380,12 +380,12 @@ const Engine = {
       // 刚按过 Ctrl 就丢失指针锁定 → 多半是浏览器快捷键(Ctrl+W/D 等)抢走了焦点
       if (performance.now() - Input.lastCtrlT < 400 && !document.fullscreenElement) {
         $('pauseHint').textContent = Settings.data.kbLock
-          ? '浏览器快捷键打断了游戏（Ctrl 组合键）。点「继续游戏」会进入全屏并锁定键盘，之后不会再被打断'
-          : '浏览器快捷键打断了游戏（Ctrl 组合键）。建议在设置里开启「全屏 + 键盘锁定」，或改用 C 下蹲';
+          ? 'A browser shortcut interrupted the game (Ctrl combo). Click "Resume" to go fullscreen with keyboard lock so it cannot happen again'
+          : 'A browser shortcut interrupted the game (Ctrl combo). Enable "Fullscreen + keyboard lock" in Settings, or crouch with C instead';
       }
     };
     Input.onLock = () => { self.paused = false; $('pause').classList.add('hidden'); $('clickToPlay').classList.add('hidden'); };
-    Input.onLockFail = () => { $('pauseHint').textContent = '浏览器拒绝了鼠标锁定，请稍候再点「继续游戏」'; if (!self.paused) $('clickToPlay').classList.remove('hidden'); };
+    Input.onLockFail = () => { $('pauseHint').textContent = 'The browser refused pointer lock. Wait a moment, then click "Resume"'; if (!self.paused) $('clickToPlay').classList.remove('hidden'); };
     document.querySelectorAll('#setTabs b').forEach((b) => b.addEventListener('click', () => {
       document.querySelectorAll('#setTabs b').forEach((x) => x.classList.remove('on')); b.classList.add('on');
       self.setTab = b.dataset.t; self.renderSettings();
@@ -403,41 +403,41 @@ const Engine = {
   openSettings() { $('settings').classList.remove('hidden'); this.renderSettings(); },
   SETTINGS_UI: {
     mouse: [
-      { k: 'sens', l: '鼠标灵敏度', t: 'range', min: 0.1, max: 8, step: 0.01, d: '采用经典 FPS 的弧度基准（每单位 0.022°），可直接套用你习惯的灵敏度数值' },
-      { k: 'zoomSens', l: '开镜灵敏度倍率', t: 'range', min: 0.3, max: 2, step: 0.01 },
-      { k: 'rawInput', l: '原始鼠标输入', t: 'bool', d: '绕过系统鼠标加速（等同 m_rawinput 1）' },
-      { k: 'invertY', l: '反转 Y 轴', t: 'bool' },
-      { k: 'moveMode', l: 'Shift 键行为', t: 'select', o: [['walk', '静步（Alt 无效）'], ['sprint', '冲刺（Alt 静步）']] },
-      { k: 'slide', l: '滑铲', t: 'bool', d: '接近满速奔跑时按 C/Ctrl 触发滑铲' },
-      { k: 'toggleCrouch', l: '切换式下蹲', t: 'bool' },
-      { k: 'kbLock', l: '全屏 + 键盘锁定', t: 'bool', d: '开局自动全屏并接管 Ctrl+W / Ctrl+D 等浏览器快捷键，避免 Ctrl 下蹲时误触导致退出鼠标锁定。长按 Esc 退出全屏' },
-      { k: 'knife', l: '近战武器', t: 'select', o: [['butterfly', '蝴蝶刀'], ['knife', '默认匕首']], d: '下次出生生效；按 F 检视' },
+      { k: 'sens', l: 'Mouse sensitivity', t: 'range', min: 0.1, max: 8, step: 0.01, d: 'Uses the classic FPS yaw scale (0.022° per unit), so you can reuse the sensitivity you are used to' },
+      { k: 'zoomSens', l: 'Scope sensitivity multiplier', t: 'range', min: 0.3, max: 2, step: 0.01 },
+      { k: 'rawInput', l: 'Raw mouse input', t: 'bool', d: 'Bypasses OS mouse acceleration (same as m_rawinput 1)' },
+      { k: 'invertY', l: 'Invert Y axis', t: 'bool' },
+      { k: 'moveMode', l: 'Shift key', t: 'select', o: [['walk', 'Walk (Alt does nothing)'], ['sprint', 'Sprint (Alt to walk)']] },
+      { k: 'slide', l: 'Sliding', t: 'bool', d: 'Press C/Ctrl while running near full speed to slide' },
+      { k: 'toggleCrouch', l: 'Toggle crouch', t: 'bool' },
+      { k: 'kbLock', l: 'Fullscreen + keyboard lock', t: 'bool', d: 'Goes fullscreen at match start and captures browser shortcuts like Ctrl+W / Ctrl+D, so crouching with Ctrl cannot knock you out of pointer lock. Hold Esc to leave fullscreen' },
+      { k: 'knife', l: 'Melee weapon', t: 'select', o: [['butterfly', 'Butterfly knife'], ['knife', 'Default knife']], d: 'Takes effect on next spawn; press F to inspect' },
     ],
     cross: [
-      { k: 'crossStyle', l: '准星类型', t: 'select', o: [['static', '静态（职业选手常用）'], ['dynamic', '动态（随散布扩张）']] },
-      { k: 'crossSize', l: '长度', t: 'range', min: 0, max: 20, step: 0.5 },
-      { k: 'crossGap', l: '间隙', t: 'range', min: -2, max: 20, step: 0.5 },
-      { k: 'crossThick', l: '粗细', t: 'range', min: 1, max: 6, step: 0.5 },
-      { k: 'crossColor', l: '颜色', t: 'color' },
-      { k: 'crossDot', l: '中心点', t: 'bool' },
-      { k: 'crossOutline', l: '黑色描边', t: 'bool' },
-      { k: 'hitmarker', l: '命中提示', t: 'bool' },
+      { k: 'crossStyle', l: 'Crosshair style', t: 'select', o: [['static', 'Static (pro favorite)'], ['dynamic', 'Dynamic (expands with spread)']] },
+      { k: 'crossSize', l: 'Length', t: 'range', min: 0, max: 20, step: 0.5 },
+      { k: 'crossGap', l: 'Gap', t: 'range', min: -2, max: 20, step: 0.5 },
+      { k: 'crossThick', l: 'Thickness', t: 'range', min: 1, max: 6, step: 0.5 },
+      { k: 'crossColor', l: 'Color', t: 'color' },
+      { k: 'crossDot', l: 'Center dot', t: 'bool' },
+      { k: 'crossOutline', l: 'Black outline', t: 'bool' },
+      { k: 'hitmarker', l: 'Hit marker', t: 'bool' },
     ],
     vm: [
-      { k: 'vmFov', l: '持枪视野 viewmodel_fov', t: 'range', min: 54, max: 68, step: 1 },
-      { k: 'vmX', l: '水平偏移 offset_x', t: 'range', min: -2.5, max: 2.5, step: 0.1 },
-      { k: 'vmY', l: '前后偏移 offset_y', t: 'range', min: -2, max: 2, step: 0.1 },
-      { k: 'vmZ', l: '垂直偏移 offset_z', t: 'range', min: -2, max: 2, step: 0.1 },
-      { k: 'vmBob', l: '走动晃动', t: 'bool' },
+      { k: 'vmFov', l: 'Viewmodel FOV', t: 'range', min: 54, max: 68, step: 1 },
+      { k: 'vmX', l: 'Horizontal offset', t: 'range', min: -2.5, max: 2.5, step: 0.1 },
+      { k: 'vmY', l: 'Forward offset', t: 'range', min: -2, max: 2, step: 0.1 },
+      { k: 'vmZ', l: 'Vertical offset', t: 'range', min: -2, max: 2, step: 0.1 },
+      { k: 'vmBob', l: 'Walk bob', t: 'bool' },
     ],
     gfx: [
-      { k: 'quality', l: '画质预设', t: 'select', o: [['low', '低（低端集显）'], ['medium', '中'], ['high', '高（MSAA + 4K 阴影）'], ['ultra', '极致（高分屏原生分辨率）']], d: '纹理分辨率在下次刷新页面时生效' },
-      { k: 'renderScale', l: '渲染比例', t: 'range', min: 0.5, max: 1, step: 0.05 },
-      { k: 'motionFx', l: '镜头特效（暗角/颗粒/色差/震屏）', t: 'bool' },
-      { k: 'showFps', l: '显示帧率 / 速度', t: 'bool' },
+      { k: 'quality', l: 'Quality preset', t: 'select', o: [['low', 'Low (integrated GPUs)'], ['medium', 'Medium'], ['high', 'High (MSAA + 4K shadows)'], ['ultra', 'Ultra (native hi-DPI resolution)']], d: 'Texture resolution changes apply after you refresh the page' },
+      { k: 'renderScale', l: 'Render scale', t: 'range', min: 0.5, max: 1, step: 0.05 },
+      { k: 'motionFx', l: 'Camera effects (vignette, grain, aberration, shake)', t: 'bool' },
+      { k: 'showFps', l: 'Show FPS / speed', t: 'bool' },
     ],
     audio: [
-      { k: 'volume', l: '主音量', t: 'range', min: 0, max: 1, step: 0.01 },
+      { k: 'volume', l: 'Master volume', t: 'range', min: 0, max: 1, step: 0.01 },
     ],
   },
   renderSettings() {
@@ -470,7 +470,7 @@ const Engine = {
     }
     if (this.setTab === 'cross') {
       const pv = document.createElement('div'); pv.className = 'srow';
-      pv.innerHTML = '<div>预览</div><div class="crossPreview"><canvas id="crossPv"></canvas></div><div></div>';
+      pv.innerHTML = '<div>Preview</div><div class="crossPreview"><canvas id="crossPv"></canvas></div><div></div>';
       body.appendChild(pv);
       this.drawCrossPreview();
     }
@@ -497,11 +497,11 @@ const Engine = {
 
 window.addEventListener('error', (e) => {
   const f = $('fatal');
-  if (f) { f.classList.remove('hidden'); f.textContent = '运行错误：' + (e.message || e) + '\n' + (e.filename || '') + ':' + (e.lineno || ''); }
+  if (f) { f.classList.remove('hidden'); f.textContent = 'Runtime error: ' + (e.message || e) + '\n' + (e.filename || '') + ':' + (e.lineno || ''); }
 });
 Engine.boot().catch((e) => {
   console.error(e);
   const f = $('fatal'); f.classList.remove('hidden');
-  f.textContent = '启动失败：' + (e && e.message ? e.message : e) + '\n\n请确认浏览器支持 WebGL（推荐 Edge / Chrome 最新版）。';
+  f.textContent = 'Failed to start: ' + (e && e.message ? e.message : e) + '\n\nMake sure your browser supports WebGL (latest Edge / Chrome recommended).';
 });
 window.__engine = Engine;

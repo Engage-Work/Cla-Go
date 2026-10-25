@@ -26,14 +26,14 @@ const fxDec = (x) => (x && x.V ? vn(x.V) : x);
 // ======================================================================
 class NetConn {
   constructor(url) { this.url = url; this.ws = null; this.id = 0; this.role = null; this.onmsg = null; this.onclose = null; }
-  open(role, name) {
+  open(role, name, timeoutMs = 6000) {
     return new Promise((resolve, reject) => {
       let ws;
       try { ws = new WebSocket(this.url); } catch (e) { reject(new Error('Could not connect: ' + e.message)); return; }
       this.ws = ws;
       let done = false;
       const fail = (msg) => { if (!done) { done = true; reject(new Error(msg)); } };
-      const timer = setTimeout(() => { fail('Connection timed out. Check the server address and your firewall'); try { ws.close(); } catch (e) { /* ignore */ } }, 6000);
+      const timer = setTimeout(() => { fail('Connection timed out. Check the server address and your firewall'); try { ws.close(); } catch (e) { /* ignore */ } }, timeoutMs);
       ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', role, name }));
       ws.onerror = () => fail('Cannot reach the multiplayer server (' + this.url + ')');
       ws.onclose = () => { clearTimeout(timer); fail('Connection closed'); if (done && this.onclose) this.onclose(); };
@@ -471,6 +471,19 @@ class ModeMirror {
 //  Lobby (the "Multiplayer" panel in the main menu)
 // ======================================================================
 const NAME_KEY = 'sandstorm_fps_netname';
+// Launched from Engage into a match: `#play=<base64url JSON {ws, role, name}>`. The ws URL already
+// carries a short-lived room ticket from the Engage games relay, which speaks server.js's protocol.
+const EngagePlay = (() => {
+  const m = location.hash.match(/[#&]play=([^&]+)/);
+  if (!m) return null;
+  try {
+    const bytes = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    const s = JSON.parse(new TextDecoder().decode(bytes));
+    // Keep the ticket out of bookmarks, shared links and remixes
+    history.replaceState(null, '', location.pathname + location.search);
+    return s && /^wss?:\/\//.test(s.ws) && (s.role === 'host' || s.role === 'guest') ? s : null;
+  } catch (e) { return null; }
+})();
 const Lobby = {
   conn: null, role: null, players: [], opts: { mode: 'tdm', diff: 'normal', size: 3, ff: false }, inGame: false, hostIn: false,
   ctx: null,
@@ -484,7 +497,7 @@ const Lobby = {
     // When opened from the multiplayer server, ask it for the LAN address so roommates know which URL to open
     this.lan = null;
     if (location.protocol === 'http:') fetch('/api/lan').then((r) => r.json()).then((d) => { this.lan = d.ips.map((ip) => `http://${ip}:${d.port}`); this.render(); }).catch(() => {});
-    if (location.protocol === 'https:') $('lbTip').innerHTML = 'This is the online demo page (HTTPS), and browsers do not let it connect to a LAN server.<br>For multiplayer, first run <b>start-lan-server.cmd</b> (or <b>node server/server.js</b>) on one computer, then have everyone open the address it shows.';
+    if (location.protocol === 'https:' && !EngagePlay) $('lbTip').innerHTML = 'This is the online demo page (HTTPS), and browsers do not let it connect to a LAN server.<br>For multiplayer, first run <b>start-lan-server.cmd</b> (or <b>node server/server.js</b>) on one computer, then have everyone open the address it shows.';
     $('btnNet').addEventListener('click', () => this.open());
     $('lbBack').addEventListener('click', () => this.close());
     $('lbHost').addEventListener('click', () => this.connect('host'));
@@ -505,11 +518,22 @@ const Lobby = {
       else if (pid === this.conn.id) this.conn.send({ t: 'team', team });
       Sound.play('ui_click');
     });
+
+    if (EngagePlay) {
+      if (EngagePlay.name) $('lbName').value = String(EngagePlay.name).slice(0, 12);
+      $('lobby').querySelector('.ptitle small').textContent = 'Engage';
+      this.open();
+      this.status('Joining…');
+      // The first frames compile shaders and can hold the main thread for seconds; connecting
+      // after them keeps that stall from running down the connection timeout.
+      requestAnimationFrame(() => requestAnimationFrame(() => this.connect(EngagePlay.role)));
+    }
   },
   open() { $('menu').classList.add('hidden'); $('lobby').classList.remove('hidden'); this.render(); },
   close() { $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); },
   status(s, err) { const el = $('lbStatus'); el.textContent = s; el.classList.toggle('err', !!err); },
   wsUrl() {
+    if (EngagePlay) return EngagePlay.ws;
     let s = $('lbServer').value.trim().replace(/^(https?|wss?):\/\//, '').replace(/\/.*$/, '');
     if (!s) s = 'localhost:8080';
     return (location.protocol === 'https:' ? 'wss://' : 'ws://') + s + '/ws';
@@ -522,14 +546,15 @@ const Lobby = {
     const name = this.myName();
     this.status('Connecting…');
     const conn = new NetConn(this.wsUrl());
-    try { await conn.open(role, name); } catch (e) { this.status(e.message, true); return; }
+    // The Engage relay is across the internet rather than the room, so give it longer
+    try { await conn.open(role, name, EngagePlay ? 15000 : 6000); } catch (e) { this.status(e.message, true); return; }
     this.conn = conn; this.role = role; this.name = name;
     conn.onmsg = (from, m) => this.onMessage(from, m);
     conn.onclose = () => this.lost('Lost connection to the multiplayer server');
     if (role === 'host') {
       this.players = [{ pid: conn.id, name, team: Engine.opts.team || 'CT', host: true }];
       this.ctx = null;
-      this.status('Room created. Have your friends open the game at the same address and click "Join Room"');
+      this.status(EngagePlay ? 'Match open. Invite people from Engage' : 'Room created. Have your friends open the game at the same address and click "Join Room"');
     } else {
       this.players = []; this.hostIn = false;
       conn.send({ t: 'info', knife: Settings.data.knife });
@@ -648,6 +673,7 @@ const Lobby = {
       `<div class="lp${p.pid === myPid ? ' me' : ''}">${p.host ? '<i>Host</i>' : ''}${esc(p.name)}${(host || p.pid === myPid) ? `<span class="sw" data-pid="${p.pid}" data-team="${team === 'CT' ? 'T' : 'CT'}">Switch to ${team === 'CT' ? 'Attackers' : 'Defenders'} →</span>` : ''}</div>`).join('') || '<div class="lp empty">(bots)</div>';
     $('lbPlayers').innerHTML = `<div class="lt ct"><h4>Defenders</h4>${col('CT')}</div><div class="lt t"><h4>Attackers</h4>${col('T')}</div>`;
     const addr = this.lan && this.lan.length ? this.lan.join(' or ') : 'http://' + ($('lbServer').value.trim() || location.host);
+    if (EngagePlay) { $('lbRole').textContent = host ? 'You are the host · Invite people from Engage and they land here' : this.hostIn ? 'Joined from Engage · The host controls match settings, but you can switch sides yourself' : 'Waiting for the host…'; return; }
     $('lbRole').textContent = host ? `You are the host · Friends: open ${addr} in a browser, then click "Multiplayer" → "Join Room"` : this.hostIn ? 'Joined the room · The host controls match settings, but you can switch sides yourself' : 'Waiting for the host to create a room…';
   },
 };

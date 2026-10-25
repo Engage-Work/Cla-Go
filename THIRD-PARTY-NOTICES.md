@@ -1,28 +1,28 @@
-# 第三方组件声明
+# Third-Party Notices
 
-本项目 `lib/` 目录下的文件均为第三方开源代码，随项目一同分发，版权归原作者所有。
-`js/`、`css/`、`index.html` 为本项目原创代码，以根目录 `LICENSE`（MIT）授权。
+All files under `lib/` in this project are third-party open source code, distributed with the project; copyright belongs to their original authors.
+`js/`, `css/` and `index.html` are original code of this project, licensed under the root `LICENSE` (MIT).
 
 ## three.js
 
-- 文件：`lib/three.min.js`（r147）、`lib/CopyShader.js`、`lib/LuminosityHighPassShader.js`、
-  `lib/FXAAShader.js`、`lib/EffectComposer.js`、`lib/RenderPass.js`、`lib/ShaderPass.js`、
-  `lib/UnrealBloomPass.js`、`lib/Sky.js`
-- 来源：<https://github.com/mrdoob/three.js>
-- 版权：Copyright © 2010-2022 three.js authors
-- 许可：MIT
+- Files: `lib/three.min.js` (r147), `lib/CopyShader.js`, `lib/LuminosityHighPassShader.js`,
+  `lib/FXAAShader.js`, `lib/EffectComposer.js`, `lib/RenderPass.js`, `lib/ShaderPass.js`,
+  `lib/UnrealBloomPass.js`, `lib/Sky.js`
+- Source: <https://github.com/mrdoob/three.js>
+- Copyright: Copyright © 2010-2022 three.js authors
+- License: MIT
 
-以上文件为 three.js 本体及其官方 examples/js 示例代码，仅做了本地化放置（用于离线运行），未修改其内容。
+The files above are three.js itself and its official examples/js code. They were only placed locally (for offline use); their contents are unmodified.
 
-### 相关算法出处
+### Algorithm references
 
-- `FXAAShader.js`：FXAA 算法由 NVIDIA 提出（<https://developer.download.nvidia.com/assets/gamedev/files/sdk/11/FXAA_WhitePaper.pdf>），
-  three.js 的 GLSL 移植版同为 MIT 许可。
-- `Sky.js`：基于 Preetham 等人的解析式天光模型
-  （*A Practical Analytic Model for Daylight*），three.js 实现版为 MIT 许可。
-- `UnrealBloomPass.js`：布隆效果参考 Unreal Engine 的后处理文档实现，three.js 实现版为 MIT 许可。
+- `FXAAShader.js`: the FXAA algorithm was introduced by NVIDIA (<https://developer.download.nvidia.com/assets/gamedev/files/sdk/11/FXAA_WhitePaper.pdf>);
+  the three.js GLSL port is likewise MIT licensed.
+- `Sky.js`: based on the analytic daylight model by Preetham et al.
+  (*A Practical Analytic Model for Daylight*); the three.js implementation is MIT licensed.
+- `UnrealBloomPass.js`: the bloom effect follows the Unreal Engine post-processing documentation; the three.js implementation is MIT licensed.
 
-## MIT 许可全文
+## Full MIT License text
 
 ```
 MIT License

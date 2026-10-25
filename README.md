@@ -1,135 +1,141 @@
-# 沙暴行动 · SANDSTORM
+# SANDSTORM
 
-网页版战术射击游戏：拟真战术射击手感 + 爆发式滑铲。纯静态，无需安装，无需联网；支持局域网联机。
+A tactical shooter for the web: realistic gunplay plus burst sliding. Pure static files, nothing to install, no internet connection needed, and LAN multiplayer included.
 
-> **在线试玩**：<https://kwusv55.github.io/Cla-Go/> —— 点开即玩，无需下载。
+> **Play online**: <https://engage-work.github.io/Cla-Go/>. Click and play, no download.
 
-![主菜单](docs/menu.jpg)
+![Main menu](docs/menu.jpg)
 
-| A 包点 | 中路交火 |
+| A site | Mid fight |
 | --- | --- |
-| ![A 包点](docs/gameplay-a-site.jpg) | ![中路](docs/gameplay-mid.jpg) |
+| ![A site](docs/gameplay-a-site.jpg) | ![Mid](docs/gameplay-mid.jpg) |
 
-## 启动
+*Screenshots show the original Chinese interface.*
 
-双击 `index.html`（推荐 Edge / Chrome 最新版），点「开始游戏」即可。
-点击后鼠标会被锁定并自动全屏，按 `Esc` 暂停（长按 `Esc` 退出全屏）。
+## Getting started
 
-> 全屏是为了启用浏览器的「键盘锁定」：只有全屏时网页才能接管 `Ctrl+W`、`Ctrl+D` 等浏览器快捷键。
-> 否则 `Ctrl` 下蹲 + 移动键会触发浏览器快捷键，抢走鼠标锁定（表现为像按了 Esc 一样跳出暂停菜单）。
-> 不想全屏可在 设置 → 鼠标与移动 关闭「全屏 + 键盘锁定」，并改用 `C` 下蹲。
+Double-click `index.html` (latest Edge / Chrome recommended) and click "Play".
+The mouse is locked and the game goes fullscreen on click. Press `Esc` to pause (hold `Esc` to leave fullscreen).
 
-## 局域网联机
+> Fullscreen is needed for the browser's "keyboard lock": only in fullscreen can a page capture browser shortcuts such as `Ctrl+W` and `Ctrl+D`.
+> Without it, `Ctrl` to crouch plus a movement key can trigger a browser shortcut and steal pointer lock (it looks like pressing Esc: the pause menu pops up).
+> If you do not want fullscreen, turn off "Fullscreen + keyboard lock" under Settings → Mouse & Movement and crouch with `C` instead.
 
-和室友 / 同学在同一个 WiFi 下一起玩（对战，或者同队一起打机器人）：
+## LAN multiplayer
 
-1. 其中一台电脑装好 [Node.js](https://nodejs.org/zh-cn)（LTS 版即可），双击 **`启动联机服务器.cmd`**。
-   第一次运行会弹出管理员确认，用来在防火墙放行端口，点「是」；窗口里会显示联机地址，例如 `http://192.168.1.5:8080`。
-2. 两个人都用浏览器打开这个地址（开服务器的那台也可以用 `http://localhost:8080`）。
-3. 一个人点「联机对战」→「创建房间」当房主，另一个人点「联机对战」→「加入房间」。
-4. 在大厅里选阵营（同一边就是合作打机器人），房主选好模式后点「开始对局」。每队空位会自动补机器人。
+Play with a roommate or classmates on the same WiFi (versus each other, or on the same team against bots):
 
-- 支持团队死斗和爆破竞技；房主的电脑负责计算整局对战（机器人、伤害、经济、C4），其他人只需要浏览器。
-- 自己的移动在本机即时计算，不会感到延迟；开枪命中由房主按你屏幕上看到的位置判定（延迟补偿）。
-- 中途掉线或退出后，回到大厅点「加入进行中的对局」就能回去。房主切出窗口时对局照常进行。
-- 连不上时依次检查：两台电脑是不是连同一个 WiFi；服务器窗口有没有关掉；校园网 / 酒店 WiFi 可能禁止设备互访（AP 隔离），可以改用手机热点。
-- 端口被占用时可以指定其他端口：`node server/server.js 8090 --firewall`。
-- 在线试玩页面（HTTPS）不能联机，因为浏览器不允许 HTTPS 页面连接局域网服务器。
+1. On one computer, install [Node.js](https://nodejs.org/en) (the LTS version is fine) and double-click **`start-lan-server.cmd`**. On macOS / Linux, run `node server/server.js` instead.
+   On first run Windows asks for administrator approval to open the port in the firewall; click "Yes". The window shows the multiplayer address, for example `http://192.168.1.5:8080`.
+2. Everyone opens that address in a browser (the computer running the server can also use `http://localhost:8080`).
+3. One player clicks "Multiplayer" → "Host Room" to become the host; the others click "Multiplayer" → "Join Room".
+4. In the lobby, pick your side (the same side means co-op against bots). The host chooses the mode and clicks "Start Match". Empty slots on each team are filled with bots.
 
-## 模式
+- Team Deathmatch and Demolition are supported. The host's computer simulates the whole match (bots, damage, economy, C4); everyone else only needs a browser.
+- Your own movement is computed locally, so it never feels laggy. Shots are judged by the host against what you saw on your screen (lag compensation).
+- If you drop out or quit mid-match, go back to the lobby and click "Join Match in Progress" to return. The match keeps running if the host switches windows.
+- If you cannot connect, check in order: are both computers on the same WiFi, is the server window still open, and does a campus / hotel WiFi block device-to-device traffic (AP isolation)? A phone hotspot works around that.
+- If the port is taken, pick another one: `node server/server.js 8090 --firewall`.
+- The online demo page (HTTPS) cannot do multiplayer, because browsers do not let HTTPS pages connect to a LAN server.
 
-| 模式 | 说明 |
+## Modes
+
+| Mode | Description |
 | --- | --- |
-| 爆破竞技 | 5v5 回合制，经济系统，T 安放 / CT 拆除 C4，先胜 9 局，第 8 局后交换攻守 |
-| 团队死斗 | 即时复活，出生 20 秒内可免费换枪，先达 50 击杀 |
-| 靶场训练 | 无限弹药，移动靶，右侧实时显示速度 / 散布 / 后坐序号 |
+| Demolition | 5v5 rounds with an economy. Attackers plant the C4, Defenders defuse it. First to 9 wins; sides switch after round 8 |
+| Team Deathmatch | Instant respawn, free weapon swaps for 20 seconds after spawning, first to 50 kills |
+| Firing Range | Unlimited ammo, moving targets, live speed / spread / recoil index readout on the right |
 
-机器人难度：新兵 / 老兵 / 精英 / 宇宙级（反应时间、跟枪、压枪、爆头率、滑铲频率逐级提升）。
-机器人会在赶路、转点、回防和遭遇敌人时滑铲。
+Bot skill: Recruit / Veteran / Elite / Cosmic (reaction time, tracking, recoil control, headshot rate and sliding frequency all rise step by step).
+Bots slide while traveling, rotating, retaking sites and when they meet an enemy.
 
-敌我识别：CT 为深蓝灰制服 + 黑色防弹背心 + 头盔，臂章蓝色；T 为沙土色衣裤 + 棕色胸挂 + 暗红头巾蒙面，臂章橙色。
-队友头顶显示阵营色标记和名字；准星对准可见敌人时，准星下方显示红色「敌人 名字」。
+Telling sides apart: Defenders wear dark blue-grey uniforms with a black vest and helmet and a blue armband; Attackers wear sand-colored clothes with a brown chest rig and a dark red headscarf over the face, and an orange armband.
+Teammates get a side-colored marker and name overhead; when your crosshair is on a visible enemy, a red "Enemy Name" appears below it.
 
-## 操作
+## Controls
 
-| 按键 | 功能 |
+| Key | Action |
 | --- | --- |
-| W A S D | 移动 |
-| Shift | 静步（设置里可改为冲刺模式，此时 Alt 静步） |
-| Ctrl / C | 蹲下；**接近满速奔跑时按下 = 滑铲**，滑铲中起跳保留惯性 |
-| 空格 | 跳跃 |
-| 左键 / 右键 | 开火 / 狙击开镜、刀重击、投掷物低抛 |
-| R / F | 换弹 / 检视（蝴蝶刀有完整的收刀、指间滚刀、甩开检视动作） |
-| 1-5、Q、滚轮 | 主武器 / 副武器 / 刀 / 投掷物 / C4，Q 快速切换 |
-| E | 拾取武器、安放（也可按住左键）/ 拆除 C4 |
-| G | 丢弃当前武器 |
-| B / Tab | 购买菜单 / 计分板 |
+| W A S D | Move |
+| Shift | Walk quietly (can be switched to sprint in Settings, in which case Alt walks) |
+| Ctrl / C | Crouch; **pressing it at near-full running speed = slide**, and jumping out of a slide keeps your momentum |
+| Space | Jump |
+| Left / right click | Fire / scope (snipers), heavy knife attack, underhand grenade throw |
+| R / F | Reload / inspect (the butterfly knife has full close, finger-roll and flip-open inspect animations) |
+| 1-5, Q, mouse wheel | Primary / secondary / knife / grenades / C4; Q quick-swaps |
+| E | Pick up weapons, plant (or hold left click) / defuse C4 |
+| G | Drop the current weapon |
+| B / Tab | Buy menu / scoreboard |
 
-## 手感参数
+## Handling parameters
 
-- 128 tick 固定步长物理，经典 FPS 移动模型：加速 5.5、摩擦 5.2、空中加速 12、重力 800u/s²
-- M4A4 跑速 225u/s，静步 117u/s，蹲走 77u/s；急停到“精准速度”约 70ms
-- 跳跃高度 57u，蹲跳可上 64u 木箱；落地体力惩罚限制连跳
-- 灵敏度采用经典 FPS 弧度基准（每单位 0.022°），支持原始鼠标输入
-- 散布 = 基础 + 移动 + 空中 + 落地 + 连射累积；AK/M4 固定压枪弹道，停火后回复
-- 爆头 ×4、胸 ×1、腹 ×1.25、腿 ×0.75；护甲/头盔减伤；距离衰减；木门/木箱/薄墙/铁皮可穿透
-- 头部命中区是贴合头模的椭球（头盔算头部），头顶上方的空气和脖子不算爆头
+- 128 tick fixed-step physics with a classic FPS movement model: acceleration 5.5, friction 5.2, air acceleration 12, gravity 800 u/s²
+- M4A4 run speed 225 u/s, walk 117 u/s, crouch-walk 77 u/s; counter-strafing reaches "accurate speed" in about 70 ms
+- Jump height 57 u, crouch-jump onto a 64 u crate; a landing stamina penalty limits bunny hopping
+- Sensitivity uses the classic FPS yaw scale (0.022° per unit) and supports raw mouse input
+- Spread = base + movement + air + landing + accumulated fire; AK / M4 follow a fixed recoil pattern that recovers after you stop shooting
+- Headshot ×4, chest ×1, stomach ×1.25, legs ×0.75; armor / helmet damage reduction; distance falloff; wooden doors, crates, thin walls and sheet metal can be penetrated
+- The head hitbox is an ellipsoid fitted to the head model (the helmet counts as head); the air above the head and the neck do not count as headshots
 
-## 近战武器
+## Melee weapon
 
-设置 → 鼠标与移动 →「近战武器」可选蝴蝶刀（默认）或匕首，下次出生生效。
-蝴蝶刀由刀刃和两片镂空刀柄组成，各自绕销轴转动：掏出时甩开，按 `F` 检视。
+Under Settings → Mouse & Movement → "Melee weapon" choose the butterfly knife (default) or the plain knife; it takes effect on your next spawn.
+The butterfly knife is a blade and two skeletonized handles, each rotating around its own pivot pin: it flips open when drawn, and `F` inspects it.
 
-## 阵亡视角
+## Death cam
 
-阵亡后镜头从眼睛位置拉到自己尸体后上方，可用鼠标自由环绕查看，不会自动锁定击杀者。
-爆破模式 2.5 秒后切换到队友观战（左/右键切换）。
+After you die, the camera pulls from your eye position to above and behind your body, and you can orbit freely with the mouse; it does not auto-lock onto the killer.
+In Demolition, after 2.5 seconds it switches to spectating teammates (left / right click to cycle).
 
-## 更新记录
+## Changelog
 
-- **v1.2.0**：新增局域网联机（房主权威 + 本机移动预测 + 延迟补偿），零依赖 Node 联机服务器，大厅支持选阵营 / 模式 / 中途加入
-- **v1.1.0**：修复 AWP 开镜下蹲时 Ctrl 组合键触发浏览器快捷键导致退出（全屏键盘锁定）；机器人整体降低强度并会滑铲；头部命中盒改为贴合椭球、脖子不再算爆头；阵亡视角改为可自由环绕；重做两队人物模型并加入敌我标识；新增蝴蝶刀及检视动画
-- **v1.0.0**：首个版本
+- **v1.2.0**: Added LAN multiplayer (host-authoritative with local movement prediction and lag compensation), a zero-dependency Node multiplayer server, and a lobby with side / mode selection and mid-match joining
+- **v1.1.0**: Fixed the Ctrl combo triggering browser shortcuts and exiting while crouching with the AWP scoped (fullscreen keyboard lock); bots made weaker overall and able to slide; head hitbox is now a fitted ellipsoid and the neck no longer counts as a headshot; the death cam now orbits freely; remade both teams' character models and added side identification; added the butterfly knife and its inspect animation
+- **v1.0.0**: First release
 
-## 文件结构
+## File structure
 
 ```
-index.html          入口
-css/style.css       界面样式
-lib/                three.js r147 及后处理（本地化，离线可用）
-js/core.js          常量、设置、输入
-js/audio.js         程序化合成音效 + HRTF 3D 定位
-js/textures.js      程序化 PBR 纹理
-js/world.js         AABB 碰撞世界、射线、碰撞盒扫掠
-js/map.js           地图生成 + 顶点 AO 烘焙
-js/nav.js           导航网格 + A*
-js/weapons.js       武器数据与弹道
-js/models.js        武器/角色模型（蒙皮）
-js/effects.js       粒子、贴花、曳光、弹壳、烟雾
-js/ragdoll.js       布娃娃
-js/actor.js         移动物理与武器状态机
-js/bot.js           机器人 AI
-js/viewmodel.js     第一人称持枪动画
-js/hud.js           HUD / 雷达 / 购买菜单
-js/game.js          对局逻辑与模式
-js/net.js           联机：连接、大厅、快照同步、延迟补偿
-js/main.js          渲染管线、菜单、主循环
-server/server.js    联机服务器（静态托管 + WebSocket 中转，零依赖）
-启动联机服务器.cmd   Windows 一键启动联机服务器
-docs/               截图
+index.html          Entry point
+css/style.css       UI styles
+lib/                three.js r147 and post-processing (bundled locally, works offline)
+js/core.js          Constants, settings, input
+js/audio.js         Procedurally synthesized sound + HRTF 3D positioning
+js/textures.js      Procedural PBR textures
+js/world.js         AABB collision world, rays, box sweeps
+js/map.js           Map generation + vertex AO baking
+js/nav.js           Navigation mesh + A*
+js/weapons.js       Weapon data and ballistics
+js/models.js        Weapon / character models (skinned)
+js/effects.js       Particles, decals, tracers, shell casings, smoke
+js/ragdoll.js       Ragdolls
+js/actor.js         Movement physics and the weapon state machine
+js/bot.js           Bot AI
+js/viewmodel.js     First-person weapon animation
+js/hud.js           HUD / radar / buy menu
+js/game.js          Match logic and modes
+js/net.js           Multiplayer: connection, lobby, snapshot sync, lag compensation
+js/main.js          Render pipeline, menus, main loop
+server/server.js    Multiplayer server (static hosting + WebSocket relay, zero dependencies)
+start-lan-server.cmd  One-click multiplayer server launcher for Windows
+docs/               Screenshots
 ```
 
-## 技术要点
+## Technical notes
 
-- **零外部素材**：音效全部用 Web Audio 程序化合成（含 HRTF 3D 定位），纹理全部用代码生成的 PBR 贴图（反照率 + 法线 + 粗糙度），模型全部由几何体放样拼装，地图由网格雕刻生成并对顶点烘焙环境光遮蔽。整个项目不含任何图片、音频或模型文件。
-- **可离线运行**：three.js 及后处理链以 UMD 形式本地化在 `lib/`，直接双击 `index.html` 即可运行，无需服务器、无需联网、无构建步骤。
-- **联机**：房主浏览器跑权威对局，64Hz 快照下发；加入者本机预测自己的移动（地图碰撞两端确定一致），其他角色按 50ms 插值显示；房主保存 0.375 秒位置历史，按射手看到的时刻回溯判定命中。服务器只做中转，自带最小 WebSocket 实现，不需要 `npm install`。
-- **手感一致**：128 tick 固定步长物理 + 渲染插值，移动、加速、急停、后坐与散布均按经典 FPS 的数值模型实现。
+- **No external assets**: all sound is synthesized procedurally with Web Audio (including HRTF 3D positioning), all textures are code-generated PBR maps (albedo + normal + roughness), all models are lofted from primitive geometry, and the map is carved from a grid with vertex ambient occlusion baked in. The project contains no image, audio or model files.
+- **Works offline**: three.js and the post-processing chain are bundled locally in `lib/` as UMD builds, so you can just double-click `index.html`. No server, no internet, no build step.
+- **Multiplayer**: the host's browser runs the authoritative match and sends 64 Hz snapshots; joiners predict their own movement locally (map collision is deterministic on both ends) and see other characters interpolated by 50 ms; the host keeps 0.375 s of position history and rewinds to the moment the shooter saw when judging hits. The server only relays messages and ships its own minimal WebSocket implementation, so no `npm install` is needed.
+- **Consistent handling**: 128 tick fixed-step physics plus render interpolation; movement, acceleration, counter-strafing, recoil and spread all follow classic FPS numeric models.
 
-## 许可
+## License
 
-本项目原创代码以 [MIT 许可](LICENSE) 开源。
+The original code in this project is open source under the [MIT License](LICENSE).
 
-`lib/` 目录下的 three.js 及其示例代码为第三方组件，版权归原作者所有，同样以 MIT 许可分发，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+three.js and its example code under `lib/` are third-party components; copyright belongs to their original authors and they are likewise distributed under the MIT License. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-本项目为原创同人作品，与任何商业游戏及其发行商无关联，未使用任何第三方游戏的美术、音频或代码资源。
+This project is an original fan work. It is not affiliated with any commercial game or its publisher, and uses none of any third-party game's art, audio or code.
+
+Upstream: <https://github.com/Kwusv55/Cla-Go> (MIT, by Kwusv55).
+
+This fork is the English Engage Edition of Cla-Go, maintained by Engage.

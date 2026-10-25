@@ -97,22 +97,22 @@ function sys(sock, obj) { sock.send('0|' + JSON.stringify(obj)); }
 function hello(sock, msg) {
   let m; try { m = JSON.parse(msg); } catch (e) { return null; }
   if (!m || m.t !== 'hello') return null;
-  const name = String(m.name || '玩家').slice(0, 16);
+  const name = String(m.name || 'Player').slice(0, 16);
   if (m.role === 'host') {
-    if (host && host.sock.open) { sys(sock, { t: 'error', msg: '房间里已经有房主了，请选择「加入房间」' }); return null; }
+    if (host && host.sock.open) { sys(sock, { t: 'error', msg: 'This server already has a host. Choose "Join Room" instead.' }); return null; }
     const p = { id: ++seq, name, sock, role: 'host' };
     host = p; peers.set(p.id, p);
     sys(sock, { t: 'welcome', id: p.id, role: 'host' });
     for (const g of peers.values()) if (g !== p) sys(sock, { t: 'join', id: g.id, name: g.name });
     for (const g of peers.values()) if (g !== p) sys(g.sock, { t: 'hostup', name });
-    log(`房主「${name}」创建了房间`);
+    log(`Host "${name}" created the room`);
     return p;
   }
   const p = { id: ++seq, name, sock, role: 'guest' };
   peers.set(p.id, p);
   sys(sock, { t: 'welcome', id: p.id, role: 'guest', host: host ? host.name : null });
   if (host) sys(host.sock, { t: 'join', id: p.id, name });
-  log(`「${name}」加入${host ? '' : '（等待房主）'}`);
+  log(`"${name}" joined${host ? '' : ' (waiting for host)'}`);
   return p;
 }
 
@@ -138,10 +138,10 @@ const wss = { upgrade(req, socket) {
     if (me === host) {
       host = null;
       for (const p of peers.values()) sys(p.sock, { t: 'hostleft' });
-      log(`房主「${me.name}」离开了`);
+      log(`Host "${me.name}" left`);
     } else {
       if (host) sys(host.sock, { t: 'leave', id: me.id });
-      log(`「${me.name}」离开了`);
+      log(`"${me.name}" left`);
     }
   };
 } };
@@ -168,25 +168,25 @@ function ensureFirewall() {
   const name = 'SandstormLAN-' + PORT;
   const has = () => { try { execFileSync('netsh', ['advfirewall', 'firewall', 'show', 'rule', 'name=' + name], { stdio: 'ignore' }); return true; } catch (e) { return false; } };
   if (has()) return;
-  console.log(`\n  第一次运行：需要在防火墙放行 TCP ${PORT} 端口，舍友才能连进来。\n  马上会弹出管理员确认，请点「是」。`);
+  console.log(`\n  First run: TCP port ${PORT} must be opened in the firewall so your friends can connect.\n  An administrator prompt is about to appear. Click "Yes".`);
   spawnSync('powershell', ['-NoProfile', '-Command',
     `Start-Process netsh -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList 'advfirewall firewall add rule name=${name} dir=in action=allow protocol=TCP localport=${PORT} profile=any'`], { stdio: 'ignore' });
-  console.log(has() ? '  防火墙已放行。' : '  没有放行成功：舍友可能连不进来（关掉窗口再运行一次即可重试）。');
+  console.log(has() ? '  Firewall rule added.' : '  Could not open the port: friends may not be able to connect (close this window and run it again to retry).');
 }
 ensureFirewall();
 
 server.on('error', (e) => {
-  if (e.code === 'EADDRINUSE') console.error(`\n端口 ${PORT} 被占用了。换一个端口：node server/server.js 8090\n`);
+  if (e.code === 'EADDRINUSE') console.error(`\nPort ${PORT} is already in use. Try another port: node server/server.js 8090\n`);
   else console.error(e);
   process.exit(1);
 });
 server.listen(PORT, '0.0.0.0', () => {
   const ips = lanIPs();
-  console.log('\n  沙暴行动 · 联机服务器已启动\n');
-  console.log(`  本机打开：  http://localhost:${PORT}`);
-  for (const ip of ips) console.log(`  舍友打开：  http://${ip}:${PORT}`);
-  if (!ips.length) console.log('  （没找到局域网地址：确认已经连上 WiFi）');
-  console.log('\n  · 你们俩要连同一个 WiFi / 局域网');
-  console.log('  · Windows 弹出防火墙提示时，勾选「专用网络」并允许访问');
-  console.log('  · 关掉这个窗口就停止服务器\n');
+  console.log('\n  SANDSTORM · LAN server started\n');
+  console.log(`  On this computer:  http://localhost:${PORT}`);
+  for (const ip of ips) console.log(`  On your network:   http://${ip}:${PORT}`);
+  if (!ips.length) console.log('  (No LAN address found: make sure you are connected to WiFi)');
+  console.log('\n  · Everyone must be on the same WiFi / local network');
+  console.log('  · If Windows shows a firewall prompt, tick "Private networks" and allow access');
+  console.log('  · Close this window to stop the server\n');
 });

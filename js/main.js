@@ -245,7 +245,6 @@ const Engine = {
     if (net) { opts.net = net.ctx; $('lobby').classList.add('hidden'); }
     this.game = new Game(this, opts);
     HUD.bind(this.game);
-    this.game.mode.id === 'comp' && HUD.openBuy(this.game);
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
     $('pause').classList.add('hidden');
@@ -260,7 +259,7 @@ const Engine = {
     if (this.game) { const g = this.game; this.game = null; g.dispose(); }
     Input.unlock(); Input.exitFullscreen();
     $('hud').classList.add('hidden'); $('pause').classList.add('hidden'); $('clickToPlay').classList.add('hidden');
-    HUD.scoreboard(false); HUD.closeBuy();
+    HUD.scoreboard(false); HUD.closeBuy(false);
     $('menu').classList.remove('hidden');
     this.camera.layers.set(0);
     this.camera.fov = 73.74; this.camera.updateProjectionMatrix();
@@ -290,7 +289,7 @@ const Engine = {
     const fu = this.final.uniforms;
     fu.time.value = now / 1000;
     if (g) {
-      const live = !this.paused && (Input.locked || this.forceRun);
+      const live = !this.paused && (Input.locked || Input.uiCursor || this.forceRun);
       // In multiplayer, pausing only stops local input; the match itself (and sync to others) must keep running
       if (live || g.net) {
         const [mx, my] = Input.takeMouse();

@@ -1,7 +1,7 @@
 'use strict';
 // ======================================================================
 //  hud.js - tactical shooter HUD: crosshair, radar, health/armor, ammo, kill feed,
-//             hit direction, scoreboard, buy menu (virtual cursor), net graph
+//             hit direction, scoreboard, buy menu (real OS cursor), net graph
 // ======================================================================
 const _hv = new THREE.Vector3(), _hd = new THREE.Vector3(), _he = new THREE.Vector3();
 const HUD = (() => {
@@ -20,12 +20,19 @@ const HUD = (() => {
     init() {
       for (const id of ['hud', 'crosshair', 'scope', 'hitmarker', 'dmgdir', 'radar', 'radarLabel', 'money', 'buyhint', 'aliveCT', 'aliveT', 'scoreCT', 'scoreT',
         'timer', 'bombIcon', 'killfeed', 'center', 'subcenter', 'hpbox', 'hp', 'armor', 'hpbar', 'armorbar', 'armorIco', 'weaponbar', 'wname', 'mag', 'reserve',
-        'progress', 'progressLabel', 'progressBar', 'netgraph', 'deathinfo', 'spectate', 'scoreboard', 'buymenu', 'vcursor', 'tags']) E[id] = $(id);
+        'progress', 'progressLabel', 'progressBar', 'netgraph', 'deathinfo', 'spectate', 'scoreboard', 'buymenu', 'tags']) E[id] = $(id);
       E.tctx = E.tags.getContext('2d');
       E.rctx = E.radar.getContext('2d');
       E.cctx = E.crosshair.getContext('2d');
+      // The menu is re-rendered when its state changes, so buy on press: a click whose mousedown and
+      // mouseup land on different nodes would be lost
+      E.buymenu.addEventListener('pointerdown', (e) => {
+        if (!buyOpen || !game || e.button !== 0) return;
+        const it = e.target.closest && e.target.closest('[data-buy]');
+        if (it) game.buy(game.player, it.dataset.buy, true);
+      });
     },
-    bind(g) { game = g; feed.length = 0; E.killfeed.innerHTML = ''; for (const k in cache) delete cache[k]; crossKey = ''; api.closeBuy(); },
+    bind(g) { game = g; feed.length = 0; E.killfeed.innerHTML = ''; for (const k in cache) delete cache[k]; crossKey = ''; api.closeBuy(false); },
     get buyOpen() { return buyOpen; },
 
     drawCrosshair(extra, hide) {
@@ -263,11 +270,16 @@ const HUD = (() => {
     // ---------------- Buy menu ----------------
     openBuy(g) {
       buyOpen = true; buyCat = -1;
-      show('buymenu', true); show('vcursor', true);
-      Input.cursorX = innerWidth / 2; Input.cursorY = innerHeight / 2;
+      show('buymenu', true);
       api.renderBuy(g);
+      Input.freeCursor();
     },
-    closeBuy() { buyOpen = false; show('buymenu', false); show('vcursor', false); },
+    // resume: the player is going back to the match (relock the pointer); otherwise it's a teardown
+    closeBuy(resume) {
+      if (!buyOpen && !Input.uiCursor) return;
+      buyOpen = false; show('buymenu', false);
+      Input.releaseCursor(!!resume);
+    },
     renderBuy(g) {
       const P = g.player, md = g.mode;
       const cols = BUY_MENU.map((cat, ci) => {
@@ -282,14 +294,8 @@ const HUD = (() => {
     },
     updateBuy(g) {
       if (!buyOpen) return;
-      E.vcursor.style.transform = `translate(${Input.cursorX}px, ${Input.cursorY}px)`;
-      if (!(g.mode.canBuy && g.mode.canBuy(g.player)) || !g.player.alive) { api.closeBuy(); return; }
+      if (!(g.mode.canBuy && g.mode.canBuy(g.player)) || !g.player.alive) { api.closeBuy(true); return; }
       api.renderBuy(g);
-    },
-    buyClick(g) {
-      const el = document.elementFromPoint(Input.cursorX, Input.cursorY);
-      const it = el && el.closest && el.closest('[data-buy]');
-      if (it) g.buy(g.player, it.dataset.buy, true);
     },
     buyKey(g, n) {
       if (buyCat < 0) { if (n >= 1 && n <= BUY_MENU.length) { buyCat = n - 1; Sound.play('ui_click'); } return; }

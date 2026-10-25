@@ -124,7 +124,6 @@ button { font-family: var(--font); }
 #buymenu .it.no { opacity: .35; } #buymenu .it.no .pr { color: var(--red); }
 #buymenu .it.own { box-shadow: inset 3px 0 0 #6fd96f; }
 #buymenu .foot { margin-top: 8px; font-size: 13px; color: var(--dim); }
-#vcursor { position: fixed; left: 0; top: 0; width: 18px; height: 18px; margin: -2px 0 0 -2px; z-index: 50; pointer-events: none; background: conic-gradient(from 135deg at 0 0, #fff 0 45deg, transparent 0); clip-path: polygon(0 0, 100% 55%, 55% 60%, 40% 100%); filter: drop-shadow(0 0 1px #000); }
 
 /* ---------------- Menu panels ---------------- */
 #menu { position: fixed; inset: 0; display: flex; align-items: center; background: linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.72) 38%, rgba(8,9,11,.05) 75%); }

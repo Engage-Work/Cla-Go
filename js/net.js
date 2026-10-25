@@ -193,7 +193,7 @@ class NetClient {
   constructor(conn) {
     this.conn = conn; this.host = false; this.client = true;
     this.g = null; this.snaps = []; this.evq = []; this.latest = null; this.off = null; this.rtt = null; this.pingT = 0;
-    this.byId = new Map(); this.me = null; this.drops = new Map(); this.n = 0; this.lastPh = null;
+    this.byId = new Map(); this.me = null; this.drops = new Map(); this.n = 0;
   }
   attach(g) { this.g = g; this.byId.clear(); this.drops.clear(); }
   detach() { this.g = null; }
@@ -218,7 +218,6 @@ class NetClient {
     } else if (m.t === 'ro') this.roster(m.list);
     else if (m.t === 'ctr') HUD.center(...m.a);
     else if (m.t === 's2') Sound.play(m.n, { vol: m.v });
-    else if (m.t === 'ob') { if (this.g.player.alive) HUD.openBuy(this.g); }
     else if (m.t === 'po') this.rtt = Math.round(performance.now() - m.c);
   }
 
@@ -278,9 +277,6 @@ class NetClient {
       if (ev.t === 's2') { Sound.play(ev.n, { vol: ev.v, rate: ev.r || 1 }); continue; }
       P.events.push(ev);
     }
-    // Bomb mode auto-opens the buy menu during each round's freeze time
-    if (M.ph === 'freeze' && this.lastPh !== 'freeze' && P.alive && md.cb) HUD.openBuy(g);
-    this.lastPh = M.ph;
   }
   applyStats(a, row) {
     a.hp = row[14]; a.armor = row[15]; a.money = row[16]; a.kills = row[17]; a.deaths = row[18]; a.assists = row[19]; a.mvp = row[20];

@@ -102,10 +102,6 @@ class Game {
     const f = typeof spec === 'function' ? spec : () => spec;
     for (const a of this.actors) if (a.isPlayer || a.remote) { const r = f(a); if (r) a.sfx(r[0], r[1]); }
   }
-  openBuyAll() {
-    HUD.openBuy(this);
-    if (this.net && this.net.host) for (const a of this.actors) if (a.remote) this.net.tell(a, { t: 'ob' });
-  }
   resetModel(a, force) {
     const h = a.model;
     if (force || h.ragdoll || h.hips.parent !== h.root) {
@@ -631,7 +627,7 @@ class Game {
     const P = this.player, c = P.cmd, I = Input, S = Settings.data;
     const ui = HUD.buyOpen;
     c.jumpPressed = false; c.duckPressed = false; c.attackPressed = false; c.attack2Pressed = false; c.usePressed = false; c.reload = false;
-    if (I.wasPressed('KeyB') && !this.over) { if (ui) HUD.closeBuy(); else if (this.mode.canBuy && this.mode.canBuy(P)) HUD.openBuy(this); }
+    if (I.wasPressed('KeyB') && !this.over) { if (ui) HUD.closeBuy(true); else if (this.mode.canBuy && this.mode.canBuy(P)) HUD.openBuy(this); }
     if (!P.alive) {
       if (I.mPressed[0] || I.wasPressed('Space')) this.nextSpectate(1);
       if (I.mPressed[2]) this.nextSpectate(-1);
@@ -652,9 +648,8 @@ class Game {
     c.jump = k('Space'); c.jumpPressed = I.wasPressed('Space');
     if (ui) {
       c.attack = false; c.attack2 = false;
-      if (I.mPressed[0]) HUD.buyClick(this);
       for (let n = 1; n <= 6; n++) if (I.wasPressed('Digit' + n)) HUD.buyKey(this, n);
-      if (I.wasPressed('Escape')) HUD.closeBuy();
+      if (I.wasPressed('Escape')) HUD.closeBuy(true);
     } else {
       c.attack = I.mouse[0]; c.attackPressed = I.mPressed[0];
       c.attack2 = I.mouse[2]; c.attack2Pressed = I.mPressed[2];
@@ -907,7 +902,7 @@ class Game {
     if (this.mode.dispose) this.mode.dispose();
     if (this.net) this.net.detach();
     Effects.clearAll();
-    HUD.closeBuy();
+    HUD.closeBuy(false);
   }
 }
 
@@ -1062,7 +1057,6 @@ class ModeComp {
     HUD.hideDeath(); g.flashAmt = 0; g.deathT = 0;
     const last = this.round === this.half ? ' (last round of the half)' : this.score.CT === this.toWin - 1 || this.score.T === this.toWin - 1 ? ' (match point)' : '';
     g.center((P) => [`Round ${this.round}${last}`, '', 3, P.team === 'T' ? (P.inv.c4 ? 'You are carrying the C4 — head to site A or B and plant it' : 'Push a site with your team and plant the C4') : 'Hold sites A and B and stop the C4 from being planted']);
-    g.openBuyAll();
   }
   halftime() {
     const g = this.g;

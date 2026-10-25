@@ -123,22 +123,24 @@ const Input = {
   uiKeyHandler: null,      // 菜单层可拦截按键
   onUnlock: null,
   onLock: null,
-  cursorX: 0, cursorY: 0,  // 虚拟光标(购买菜单)
+  // The buy menu releases pointer lock and uses the real OS cursor: a cursor rebuilt from pointer-lock
+  // deltas never matches the desktop one (movementX is an integer, so sub-pixel motion is dropped, and
+  // raw input skips the OS acceleration curve). While it is set the match keeps running and keys still count.
+  uiCursor: false,
 
   init(canvas) {
     this.canvas = canvas;
-    this.cursorX = innerWidth / 2; this.cursorY = innerHeight / 2;
     window.addEventListener('keydown', (e) => {
       if (this.uiKeyHandler && this.uiKeyHandler(e, true)) { e.preventDefault(); return; }
       if (e.ctrlKey || e.code === 'ControlLeft' || e.code === 'ControlRight') this.lastCtrlT = performance.now();
-      if (!this.locked) return;
-      if (e.code === 'Escape' && !(typeof HUD !== 'undefined' && HUD.buyOpen)) { e.preventDefault(); this.unlock(); return; }
+      if (!this.locked && !this.uiCursor) return;
+      if (e.code === 'Escape' && this.locked) { e.preventDefault(); this.unlock(); return; }
       if (GAME_KEYS.has(e.code) || e.ctrlKey || e.altKey || e.metaKey) e.preventDefault();
       if (!e.repeat) { this.down.add(e.code); this.pressed.add(e.code); }
     }, true);
     window.addEventListener('keyup', (e) => {
       if (this.uiKeyHandler && this.uiKeyHandler(e, false)) { e.preventDefault(); }
-      if (this.locked && (GAME_KEYS.has(e.code) || e.altKey)) e.preventDefault();
+      if ((this.locked || this.uiCursor) && (GAME_KEYS.has(e.code) || e.altKey)) e.preventDefault();
       this.down.delete(e.code);
     }, true);
     document.addEventListener('mousemove', (e) => {
@@ -148,8 +150,6 @@ const Input = {
       // Chromium 偶发的指针锁定尖峰过滤
       if (Math.abs(mx) > 1600 || Math.abs(my) > 1600) return;
       this.dx += mx; this.dy += my;
-      this.cursorX = clamp(this.cursorX + mx, 0, innerWidth);
-      this.cursorY = clamp(this.cursorY + my, 0, innerHeight);
     });
     document.addEventListener('mousedown', (e) => {
       if (!this.locked) return;
@@ -168,7 +168,9 @@ const Input = {
         this.skipMoves = 1;
         if (this.onLock) this.onLock();
       } else {
-        this.down.clear(); this.mouse.fill(false);
+        this.mouse.fill(false);
+        if (this.uiCursor) return;   // released on purpose for the buy menu: keep held keys, don't pause
+        this.down.clear();
         if (was && this.onUnlock) this.onUnlock();
       }
     });
@@ -208,6 +210,11 @@ const Input = {
     this.fullscreen();
   },
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); },
+  // Hand the real cursor to an in-match menu without pausing the match
+  freeCursor() { this.uiCursor = true; this.mouse.fill(false); this.unlock(); },
+  // Give the cursor back: relock when resume is set (the browser may refuse without a recent click/key,
+  // in which case onLockFail and the click-to-continue overlay take over), or just drop the menu state
+  releaseCursor(resume) { if (!this.uiCursor) return; this.uiCursor = false; this.dx = this.dy = 0; if (resume) this.lock(); },
 
   isDown(code) { return this.down.has(code); },
   wasPressed(code) { return this.pressed.has(code); },

@@ -99,7 +99,7 @@ button { font-family: var(--font); }
 #deathinfo small { display: block; color: var(--dim); font-size: 14px; margin-top: 4px; }
 #spectate { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); font-size: 16px; padding: 6px 16px; background: rgba(0,0,0,.5); border-radius: 3px; }
 
-/* ---------------- 计分板 ---------------- */
+/* ---------------- Scoreboard ---------------- */
 #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(860px, 94vw); background: rgba(12,14,17,.9); border: 1px solid var(--line); border-radius: 6px; padding: 14px 18px; pointer-events: none; }
 #scoreboard h3 { margin: 6px 0; font-size: 16px; letter-spacing: 2px; display: flex; justify-content: space-between; }
 #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; margin-bottom: 10px; }
@@ -109,14 +109,14 @@ button { font-family: var(--font); }
 #scoreboard tr.dead td { opacity: .45; }
 #scoreboard td.n, #scoreboard th.n { text-align: right; width: 62px; }
 
-/* ---------------- 购买菜单 ---------------- */
+/* ---------------- Buy menu ---------------- */
 #buymenu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); pointer-events: none; }
 #buymenu .bm { pointer-events: auto; width: min(980px, 96vw); background: rgba(14,16,19,.94); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
 #buymenu .bmh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
 #buymenu .bmh .t { font-size: 22px; font-weight: 700; letter-spacing: 3px; }
 #buymenu .bmh .m { font-size: 22px; color: #a5ff9a; font-weight: 700; }
 #buymenu .cols { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-#buymenu .col h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 2px; color: var(--dim); font-weight: 400; }
+#buymenu .col h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 1px; color: var(--dim); font-weight: 400; }
 #buymenu .it { position: relative; padding: 9px 10px; margin-bottom: 6px; background: rgba(255,255,255,.05); border: 1px solid transparent; border-radius: 4px; }
 #buymenu .it .nm { font-size: 15px; } #buymenu .it .pr { font-size: 13px; color: #a5ff9a; }
 #buymenu .it .k { position: absolute; right: 8px; top: 8px; font-size: 11px; color: var(--dim); }
@@ -126,20 +126,21 @@ button { font-family: var(--font); }
 #buymenu .foot { margin-top: 8px; font-size: 13px; color: var(--dim); }
 #vcursor { position: fixed; left: 0; top: 0; width: 18px; height: 18px; margin: -2px 0 0 -2px; z-index: 50; pointer-events: none; background: conic-gradient(from 135deg at 0 0, #fff 0 45deg, transparent 0); clip-path: polygon(0 0, 100% 55%, 55% 60%, 40% 100%); filter: drop-shadow(0 0 1px #000); }
 
-/* ---------------- 菜单面板 ---------------- */
+/* ---------------- Menu panels ---------------- */
 #menu { position: fixed; inset: 0; display: flex; align-items: center; background: linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.72) 38%, rgba(8,9,11,.05) 75%); }
 .menu-inner { width: min(560px, 92vw); margin-left: max(6vw, 24px); }
-.brand .logo { font-size: 64px; font-weight: 700; letter-spacing: 10px; background: linear-gradient(180deg, #fff3d6, #ffb43a 70%, #c46d10); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 12px rgba(255,150,40,.25)); }
-.brand .sub { margin-top: 4px; font-size: 15px; letter-spacing: 6px; color: var(--dim); }
+.brand .logo { font-size: 64px; font-weight: 700; letter-spacing: 6px; background: linear-gradient(180deg, #fff3d6, #ffb43a 70%, #c46d10); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 12px rgba(255,150,40,.25)); }
+.brand .sub { margin-top: 4px; font-size: 15px; letter-spacing: 3px; color: var(--dim); }
+.brand .edition { margin-top: 10px; font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--dim); opacity: .55; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 30px 0 18px; }
 .card { padding: 14px 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.04); cursor: pointer; transition: .15s; }
 .card:hover { background: rgba(255,255,255,.08); }
 .card.active { border-color: var(--acc); background: linear-gradient(160deg, rgba(255,180,58,.22), rgba(255,180,58,.04)); }
-.card .ct { font-size: 19px; font-weight: 700; letter-spacing: 2px; }
+.card .ct { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
 .card .cd { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
 .opts { display: grid; gap: 10px; margin-bottom: 22px; }
 .opt { display: flex; align-items: center; gap: 14px; }
-.opt label { width: 84px; font-size: 14px; color: var(--dim); }
+.opt label { width: 90px; font-size: 14px; color: var(--dim); }
 .seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .seg b { font-weight: 400; font-size: 14px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,.06); cursor: pointer; transition: .12s; }
 .seg b:hover { background: rgba(255,255,255,.12); }
@@ -161,7 +162,7 @@ button.primary:hover { background: linear-gradient(180deg, #ffd47e, #ffab2e) !im
 .tabs b { font-weight: 400; padding: 8px 14px; font-size: 14px; cursor: pointer; color: var(--dim); border-bottom: 2px solid transparent; }
 .tabs b.on { color: #fff; border-bottom-color: var(--acc); }
 .setbody { overflow-y: auto; padding-right: 6px; min-height: 300px; }
-.srow { display: grid; grid-template-columns: 170px 1fr 70px; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 14px; }
+.srow { display: grid; grid-template-columns: 210px 1fr 70px; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 14px; }
 .srow .d { grid-column: 1 / -1; font-size: 12px; color: var(--dim); margin-top: -4px; }
 .srow input[type=range] { width: 100%; accent-color: var(--acc); }
 .srow input[type=number] { width: 70px; background: #0d0f12; color: #fff; border: 1px solid var(--line); border-radius: 3px; padding: 4px; font-family: var(--font); }
@@ -174,10 +175,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; font: 12px var(-
 .helptext { margin-top: 14px; font-size: 13.5px; line-height: 1.7; color: #d6d0c4; }
 .helptext p { margin: 6px 0; }
 
-/* ---------------- 联机大厅 ---------------- */
+/* ---------------- Multiplayer lobby ---------------- */
 #lobby .ptitle small { font-size: 13px; font-weight: 400; letter-spacing: 2px; color: var(--dim); margin-left: 6px; }
 .lbrow { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
-.lbrow label { width: 84px; font-size: 14px; color: var(--dim); }
+.lbrow label { width: 90px; font-size: 14px; color: var(--dim); }
 .lbrow input { flex: 1; max-width: 320px; padding: 8px 10px; font: 15px var(--font); color: var(--txt); background: #0d0f12; border: 1px solid var(--line); border-radius: 4px; user-select: text; }
 .lbrow input:focus { outline: none; border-color: var(--acc); }
 .lbtip { margin: 6px 0 4px; font-size: 13px; line-height: 1.7; color: var(--dim); }
@@ -194,7 +195,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; font: 12px var(-
 .lp i { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--acc); color: #1a1206; }
 .lp .sw { margin-left: auto; font-size: 12px; color: var(--dim); cursor: pointer; padding: 2px 6px; border-radius: 3px; }
 .lp .sw:hover { color: #fff; background: rgba(255,255,255,.1); }
-#lbOpts .opt label { width: 150px; }
+#lbOpts .opt label { width: 190px; }
 .seg.ro b { cursor: default; opacity: .75; }
 .seg.ro b:hover { background: rgba(255,255,255,.06); }
 .seg.ro b.on:hover { background: var(--acc); }

@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>沙暴行动 · SANDSTORM</title>
+<title>Sandstorm</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <canvas id="game"></canvas>
 
-<!-- ============ 战斗 HUD ============ -->
+<!-- ============ Combat HUD ============ -->
 <div id="hud" class="hidden">
   <canvas id="tags"></canvas>
   <canvas id="crosshair"></canvas>
@@ -20,7 +20,7 @@
   <div id="topleft">
     <div id="radarWrap"><canvas id="radar" width="400" height="400"></canvas><div id="radarLabel"></div></div>
     <div id="money">$800</div>
-    <div id="buyhint" class="hidden">按 <b>B</b> 购买</div>
+    <div id="buyhint" class="hidden">Press <b>B</b> to buy</div>
   </div>
 
   <div id="topbar">
@@ -41,7 +41,7 @@
   <div id="weaponbar"></div>
   <div id="ammobox"><div id="wname">AK-47</div><div><span id="mag">30</span><span id="reserve">/ 90</span></div></div>
 
-  <div id="progress" class="hidden"><div class="label" id="progressLabel">安放炸弹</div><div class="bar"><i id="progressBar"></i></div></div>
+  <div id="progress" class="hidden"><div class="label" id="progressLabel">Planting the bomb</div><div class="bar"><i id="progressBar"></i></div></div>
   <div id="netgraph"></div>
   <div id="deathinfo" class="hidden"></div>
   <div id="spectate" class="hidden"></div>
@@ -51,111 +51,112 @@
 <div id="buymenu" class="hidden"></div>
 <div id="vcursor" class="hidden"></div>
 
-<!-- ============ 主菜单 ============ -->
+<!-- ============ Main menu ============ -->
 <div id="menu" class="hidden">
   <div class="menu-inner">
     <div class="brand">
-      <div class="logo">沙暴行动</div>
-      <div class="sub">SANDSTORM · 网页战术射击</div>
+      <div class="logo">SANDSTORM</div>
+      <div class="sub">Tactical shooter for the web</div>
+      <div class="edition">Engage Edition</div>
     </div>
     <div class="cards" id="modeCards">
       <div class="card active" data-mode="comp">
-        <div class="ct">爆破竞技</div><div class="cd">5v5 回合制 · 经济系统 · 安放/拆除 C4 · 先胜 9 局</div>
+        <div class="ct">Demolition</div><div class="cd">5v5 rounds · Economy · Plant / defuse C4 · First to 9</div>
       </div>
       <div class="card" data-mode="tdm">
-        <div class="ct">团队死斗</div><div class="cd">即时复活 · 自由购买 · 先达 60 击杀</div>
+        <div class="ct">Team Deathmatch</div><div class="cd">Instant respawn · Free buys · First to 60 kills</div>
       </div>
       <div class="card" data-mode="range">
-        <div class="ct">靶场训练</div><div class="cd">移动靶 · 弹道练习 · 速度/散布实时显示</div>
+        <div class="ct">Firing Range</div><div class="cd">Moving targets · Recoil practice · Live speed / spread readout</div>
       </div>
     </div>
     <div class="opts">
-      <div class="opt"><label>阵营</label><div class="seg" id="optTeam"><b data-v="CT" class="on">反恐精英 CT</b><b data-v="T">恐怖分子 T</b></div></div>
-      <div class="opt"><label>机器人难度</label><div class="seg" id="optDiff"><b data-v="easy">新兵</b><b data-v="normal" class="on">老兵</b><b data-v="hard">精英</b><b data-v="cosmic">宇宙级</b></div></div>
-      <div class="opt"><label>每队人数</label><div class="seg" id="optSize"><b data-v="1">1</b><b data-v="2">2</b><b data-v="3">3</b><b data-v="4">4</b><b data-v="5" class="on">5</b></div></div>
+      <div class="opt"><label>Side</label><div class="seg" id="optTeam"><b data-v="CT" class="on">Defenders</b><b data-v="T">Attackers</b></div></div>
+      <div class="opt"><label>Bot skill</label><div class="seg" id="optDiff"><b data-v="easy">Recruit</b><b data-v="normal" class="on">Veteran</b><b data-v="hard">Elite</b><b data-v="cosmic">Cosmic</b></div></div>
+      <div class="opt"><label>Team size</label><div class="seg" id="optSize"><b data-v="1">1</b><b data-v="2">2</b><b data-v="3">3</b><b data-v="4">4</b><b data-v="5" class="on">5</b></div></div>
     </div>
     <div class="actions">
-      <button id="btnStart" class="primary">开始游戏</button>
-      <button id="btnNet">联机对战</button>
-      <button id="btnSettings">设置</button>
-      <button id="btnHelp">操作说明</button>
+      <button id="btnStart" class="primary">Play</button>
+      <button id="btnNet">Multiplayer</button>
+      <button id="btnSettings">Settings</button>
+      <button id="btnHelp">Controls</button>
     </div>
     <div class="foot" id="verLabel"></div>
   </div>
 </div>
 
-<!-- ============ 联机大厅 ============ -->
+<!-- ============ Multiplayer lobby ============ -->
 <div id="lobby" class="hidden">
   <div class="panel wide">
-    <div class="ptitle">联机对战 <small>局域网</small></div>
+    <div class="ptitle">Multiplayer <small>LAN</small></div>
     <div id="lbConnect">
-      <div class="lbrow"><label>联机服务器</label><input id="lbServer" spellcheck="false" placeholder="192.168.1.5:8080"></div>
-      <div class="lbrow"><label>你的昵称</label><input id="lbName" maxlength="12" spellcheck="false"></div>
-      <div class="lbtip" id="lbTip">先在一台电脑上运行 <b>启动联机服务器.cmd</b>（需要 Node.js），窗口里会显示地址。<br>两个人都用浏览器打开那个地址：一个人点「创建房间」，另一个人点「加入房间」。</div>
-      <div class="row-actions left"><button id="lbHost" class="primary">创建房间（我当房主）</button><button id="lbJoin">加入房间</button><button id="lbBack">返回</button></div>
+      <div class="lbrow"><label>Server</label><input id="lbServer" spellcheck="false" placeholder="192.168.1.5:8080"></div>
+      <div class="lbrow"><label>Nickname</label><input id="lbName" maxlength="12" spellcheck="false"></div>
+      <div class="lbtip" id="lbTip">On one computer, run <b>start-lan-server.cmd</b> (requires Node.js). The window will show an address.<br>Everyone opens that address in a browser: one player clicks &ldquo;Host Room&rdquo;, the others click &ldquo;Join Room&rdquo;.</div>
+      <div class="row-actions left"><button id="lbHost" class="primary">Host Room</button><button id="lbJoin">Join Room</button><button id="lbBack">Back</button></div>
     </div>
     <div id="lbRoom" class="hidden">
       <div class="lbrole" id="lbRole"></div>
       <div class="lbteams" id="lbPlayers"></div>
       <div class="opts" id="lbOpts"></div>
-      <div class="row-actions left"><button id="lbStart" class="primary">开始对局</button><button id="lbJoinGame" class="primary hidden">加入进行中的对局</button><button id="lbLeave">离开房间</button></div>
+      <div class="row-actions left"><button id="lbStart" class="primary">Start Match</button><button id="lbJoinGame" class="primary hidden">Join Match in Progress</button><button id="lbLeave">Leave Room</button></div>
     </div>
     <div class="hint" id="lbStatus"></div>
   </div>
 </div>
 
-<!-- ============ 暂停 ============ -->
+<!-- ============ Pause ============ -->
 <div id="pause" class="hidden">
   <div class="panel small">
-    <div class="ptitle">已暂停</div>
-    <button id="btnResume" class="primary">继续游戏</button>
-    <button id="btnPauseSettings">设置</button>
-    <button id="btnPauseHelp">操作说明</button>
-    <button id="btnQuit">退出到主菜单</button>
+    <div class="ptitle">Paused</div>
+    <button id="btnResume" class="primary">Resume</button>
+    <button id="btnPauseSettings">Settings</button>
+    <button id="btnPauseHelp">Controls</button>
+    <button id="btnQuit">Quit to Main Menu</button>
     <div class="hint" id="pauseHint"></div>
   </div>
 </div>
 
-<!-- ============ 设置 ============ -->
+<!-- ============ Settings ============ -->
 <div id="settings" class="hidden">
   <div class="panel wide">
-    <div class="ptitle">设置</div>
-    <div class="tabs" id="setTabs"><b data-t="mouse" class="on">鼠标与移动</b><b data-t="cross">准星</b><b data-t="vm">持枪视角</b><b data-t="gfx">画质</b><b data-t="audio">声音</b></div>
+    <div class="ptitle">Settings</div>
+    <div class="tabs" id="setTabs"><b data-t="mouse" class="on">Mouse &amp; Movement</b><b data-t="cross">Crosshair</b><b data-t="vm">Viewmodel</b><b data-t="gfx">Graphics</b><b data-t="audio">Audio</b></div>
     <div class="setbody" id="setBody"></div>
-    <div class="row-actions"><button id="btnSetReset">恢复默认</button><button id="btnSetClose" class="primary">完成</button></div>
+    <div class="row-actions"><button id="btnSetReset">Reset to Defaults</button><button id="btnSetClose" class="primary">Done</button></div>
   </div>
 </div>
 
-<!-- ============ 操作说明 ============ -->
+<!-- ============ Controls ============ -->
 <div id="help" class="hidden">
   <div class="panel wide">
-    <div class="ptitle">操作说明</div>
+    <div class="ptitle">Controls</div>
     <div class="helpgrid">
-      <div><kbd>W A S D</kbd> 移动</div><div><kbd>鼠标</kbd> 瞄准 / <kbd>左键</kbd> 开火</div>
-      <div><kbd>Shift</kbd> 静步（可改为冲刺）</div><div><kbd>右键</kbd> 狙击开镜 / 刀重击 / 低抛</div>
-      <div><kbd>Ctrl</kbd> 或 <kbd>C</kbd> 蹲下</div><div><kbd>R</kbd> 换弹　<kbd>F</kbd> 检视</div>
-      <div><b>疾跑中按 <kbd>C</kbd>/<kbd>Ctrl</kbd> = 滑铲</b></div><div><kbd>1-5</kbd> 切枪　<kbd>Q</kbd> 快速切换</div>
-      <div><kbd>空格</kbd> 跳跃（滑铲中起跳保留惯性）</div><div><kbd>E</kbd> 拾取 / 安放 / 拆弹</div>
-      <div><kbd>B</kbd> 购买菜单</div><div><kbd>G</kbd> 丢弃武器</div>
-      <div><kbd>Tab</kbd> 计分板</div><div><kbd>Esc</kbd> 暂停</div>
+      <div><kbd>W A S D</kbd> Move</div><div><kbd>Mouse</kbd> Aim / <kbd>Left click</kbd> Fire</div>
+      <div><kbd>Shift</kbd> Walk quietly (can be set to sprint)</div><div><kbd>Right click</kbd> Scope / heavy knife attack / underhand throw</div>
+      <div><kbd>Ctrl</kbd> or <kbd>C</kbd> Crouch</div><div><kbd>R</kbd> Reload &nbsp; <kbd>F</kbd> Inspect</div>
+      <div><b>Sprinting + <kbd>C</kbd>/<kbd>Ctrl</kbd> = Slide</b></div><div><kbd>1-5</kbd> Select weapon &nbsp; <kbd>Q</kbd> Quick-swap</div>
+      <div><kbd>Space</kbd> Jump (jump out of a slide to keep momentum)</div><div><kbd>E</kbd> Pick up / plant / defuse</div>
+      <div><kbd>B</kbd> Buy menu</div><div><kbd>G</kbd> Drop weapon</div>
+      <div><kbd>Tab</kbd> Scoreboard</div><div><kbd>Esc</kbd> Pause</div>
     </div>
     <div class="helptext">
-      <p><b>射击手感要点：</b>移动中射击散布极大——松开方向键或按反方向键“急停”后再开枪。步枪连发有固定弹道（AK 先上后左再右），向下并反向拉枪即可压枪；短点射比扫射更准。</p>
-      <p><b>穿透：</b>子弹能打穿木门、木箱、薄墙和铁皮，伤害会衰减。爆头伤害 ×4，护甲与头盔会大幅减伤。</p>
-      <p><b>滑铲：</b>以接近满速奔跑时按蹲 → 获得爆发速度并压低身位；滑铲中起跳可保留惯性。</p>
+      <p><b>Gunplay:</b> Spread is huge while moving. Let go of your movement keys, or tap the opposite direction to counter-strafe, then shoot. Rifles follow a fixed recoil pattern (the AK climbs, then pulls left, then right); pull down against it to control the spray. Short bursts beat full-auto spraying.</p>
+      <p><b>Penetration:</b> Bullets punch through wooden doors, crates, thin walls and sheet metal, losing damage on the way. Headshots deal &times;4 damage; armor and helmets cut damage sharply.</p>
+      <p><b>Sliding:</b> Press crouch at near-full sprint speed to get a burst of speed and drop your profile. Jump out of the slide to keep the momentum.</p>
     </div>
-    <div class="row-actions"><button id="btnHelpClose" class="primary">知道了</button></div>
+    <div class="row-actions"><button id="btnHelpClose" class="primary">Got it</button></div>
   </div>
 </div>
 
-<!-- ============ 载入 ============ -->
+<!-- ============ Loading ============ -->
 <div id="loading">
-  <div class="logo">沙暴行动</div>
+  <div class="logo">SANDSTORM</div>
   <div class="lbar"><i id="loadBar"></i></div>
-  <div class="ltext" id="loadText">正在初始化…</div>
+  <div class="ltext" id="loadText">Initializing…</div>
 </div>
 
-<div id="clickToPlay" class="hidden"><div>点击继续</div></div>
+<div id="clickToPlay" class="hidden"><div>Click to continue</div></div>
 <div id="fatal" class="hidden"></div>
 
 <script src="lib/three.min.js"></script>

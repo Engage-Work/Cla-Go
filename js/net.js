@@ -525,6 +525,7 @@ const Lobby = {
 
     if (EngagePlay) {
       if (EngagePlay.name) $('lbName').value = String(EngagePlay.name).slice(0, 12);
+      $('lobby').querySelector('.ptitle small').textContent = 'Engage';
       this.open();
       this.status('Joining…');
       // The first frames compile shaders and can hold the main thread for seconds; connecting

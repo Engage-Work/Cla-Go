@@ -35,7 +35,7 @@ class Game {
     this.net = opts.net || null; this.client = !!(this.net && this.net.client);
     const M = this.client ? ModeMirror : { tdm: ModeTDM, comp: ModeComp, range: ModeRange }[opts.mode];
     this.mode = new M(this, opts.mode);
-    this.player = this.createActor(opts.team, false, opts.name || '你');
+    this.player = this.createActor(opts.team, false, opts.name || 'You');
     this.vm.setTeam(opts.team);
     if (this.net) this.net.attach(this);
     if (!this.client) for (const h of opts.humans || []) this.createActor(h.team, false, h.name, h);
@@ -378,10 +378,10 @@ class Game {
       } else att.kills--;
     }
     for (const [o, dd] of v.damageBy) if (o !== att && dd >= 41 && o.team !== v.team) o.assists++;
-    HUD.killfeed({ killer: att && att !== v ? att : null, victim: v, weapon: def ? def.name : '坠落', hs, wallbang: wall, mine: (att && att.isPlayer) || v.isPlayer });
+    HUD.killfeed({ killer: att && att !== v ? att : null, victim: v, weapon: def ? def.name : 'Fall', hs, wallbang: wall, mine: (att && att.isPlayer) || v.isPlayer });
     if (att && att.isPlayer && att !== v) Sound.play('kill', { vol: 0.35 });
     // 先广播：加入者要在武器掉落之前用同一个姿态生成布娃娃
-    if (this.net) this.emit({ t: 'kill', v: v.id, k: att ? att.id : 0, w: def ? def.name : '坠落', hs: hs ? 1 : 0, wb: wall ? 1 : 0, dir: dir ? nv(dir) : null, g: group });
+    if (this.net) this.emit({ t: 'kill', v: v.id, k: att ? att.id : 0, w: def ? def.name : 'Fall', hs: hs ? 1 : 0, wb: wall ? 1 : 0, dir: dir ? nv(dir) : null, g: group });
     // 掉落
     if (v.inv.primary) v.lastPrimary = v.inv.primary.id;
     const drop = v.inv.primary || v.inv.secondary;
@@ -410,8 +410,8 @@ class Game {
     this.deathT = 0; this.killer = killer;
     // 死亡视角：从自己眼睛位置拉到尸体后上方，鼠标可自由环绕（不再自动锁定击杀者）
     this.deathYaw = v.yaw; this.deathPitch = -0.42; this.deathEye = v.eyePos(new THREE.Vector3()); this.deathQuat = this.camera.quaternion.clone();
-    const kd = killer ? `被 <span class="c${killer.team}">${killer.name}</span> 使用 ${wname} 击杀${hs ? '（爆头）' : ''}${wall ? '（穿墙）' : ''}` : '你阵亡了';
-    HUD.showDeath(kd, killer ? `对方剩余生命 ${Math.max(0, killer.hp)}` : '');
+    const kd = killer ? `Killed by <span class="c${killer.team}">${killer.name}</span> with ${wname}${hs ? ' (headshot)' : ''}${wall ? ' (through wall)' : ''}` : 'You died';
+    HUD.showDeath(kd, killer ? `Killer has ${Math.max(0, killer.hp)} HP left` : '');
     Sound.stopAll();
   }
 
@@ -542,7 +542,7 @@ class Game {
         if (!this.world.clear(p.x, p.y + 0.15, p.z, c.x, c.y, c.z)) continue;
         const dmg = 98 * Math.pow(1 - d / 9.5, 1.4);
         if (a !== g.owner && a.team === g.owner.team && !this.opts.ff) continue;
-        this.applyDamage(a, g.owner, a === g.owner ? dmg * 0.6 : dmg, 'chest', { armorPen: 0.5, type: 'grenade', name: '高爆手雷', killReward: 300 }, _g3.subVectors(c, p).normalize(), c, false);
+        this.applyDamage(a, g.owner, a === g.owner ? dmg * 0.6 : dmg, 'chest', { armorPen: 0.5, type: 'grenade', name: 'HE Grenade', killReward: 300 }, _g3.subVectors(c, p).normalize(), c, false);
       }
       const dc = this.camera.position.distanceTo(p);
       this.shake = Math.max(this.shake, clamp(1.5 - dc / 14, 0, 1.2));
@@ -831,7 +831,7 @@ class Game {
     HUD.scoreboard(Input.isDown('Tab') || this.over, this);
     if (!P.alive) {
       const t = this.viewTarget && this.viewTarget.alive ? this.viewTarget : null;
-      HUD.spectate(this.deathT > 2.5 ? (t ? `观战：${t.name}  ·  左/右键切换` : this.mode.id === 'comp' ? '等待下一回合…' : '等待复活…') : '');
+      HUD.spectate(this.deathT > 2.5 ? (t ? `Spectating: ${t.name}  ·  Left / right click to switch` : this.mode.id === 'comp' ? 'Waiting for next round…' : 'Waiting to respawn…') : '');
     } else HUD.spectate('');
   }
 
@@ -915,7 +915,7 @@ class Game {
 //  模式：团队死斗
 // ======================================================================
 class ModeTDM {
-  constructor(g) { this.g = g; this.id = 'tdm'; this.title = '团队死斗'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.limit = 50; this.total = 480; this.t = 0; this.phase = 'live'; this.spectateAllowed = false; }
+  constructor(g) { this.g = g; this.id = 'tdm'; this.title = 'Team Deathmatch'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.limit = 50; this.total = 480; this.t = 0; this.phase = 'live'; this.spectateAllowed = false; }
   setup() {
     const g = this.g, n = g.opts.size;
     for (const team of ['CT', 'T']) {
@@ -923,7 +923,7 @@ class ModeTDM {
       for (let i = 0; i < cnt; i++) g.createActor(team, true, g.botName(team, i));
     }
     for (const a of g.actors) { this.loadout(a); this.spawn(a); }
-    g.center(['团队死斗', '', 3, `先达到 ${this.limit} 击杀的队伍获胜 · 按 B 免费换枪`]);
+    g.center(['Team Deathmatch', '', 3, `First team to ${this.limit} kills wins · Press B for free weapon swaps`]);
     g.sound2d(['round_start', 0.5]);
   }
   loadout(a) {
@@ -975,13 +975,13 @@ class ModeTDM {
   onKill(v, k) {
     if (k && k !== v && k.team !== v.team) this.score[k.team]++;
     v.respawnAt = this.g.time + 3;
-    if (v.isPlayer) HUD.showDeath(document.getElementById('deathinfo').innerHTML.split('<small>')[0], '3 秒后复活');
+    if (v.isPlayer) HUD.showDeath(document.getElementById('deathinfo').innerHTML.split('<small>')[0], 'Respawning in 3s');
   }
   finish() {
     const g = this.g;
     this.phase = 'over'; g.over = true; g.frozen = true; g.noFire = true;
     const w = this.score.CT === this.score.T ? null : this.score.CT > this.score.T ? 'CT' : 'T';
-    g.center([w ? (w === 'CT' ? '反恐精英获胜！' : '恐怖分子获胜！') : '平局', w ? (w === 'CT' ? 'win-ct' : 'win-t') : '', 9, `${this.score.CT} : ${this.score.T}`]);
+    g.center([w ? (w === 'CT' ? 'Defenders win!' : 'Attackers win!') : 'Draw', w ? (w === 'CT' ? 'win-ct' : 'win-t') : '', 9, `${this.score.CT} : ${this.score.T}`]);
     g.sound2d((a) => [w === a.team ? 'round_win' : 'round_lose', 0.6]);
   }
 }
@@ -990,18 +990,18 @@ class ModeTDM {
 //  模式：靶场
 // ======================================================================
 class ModeRange {
-  constructor(g) { this.g = g; this.id = 'range'; this.title = '靶场训练'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.phase = 'live'; this.spectateAllowed = false; g.infiniteAmmo = true; }
+  constructor(g) { this.g = g; this.id = 'range'; this.title = 'Firing Range'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.phase = 'live'; this.spectateAllowed = false; g.infiniteAmmo = true; }
   setup() {
     const g = this.g, P = g.player;
     const enemy = P.team === 'CT' ? 'T' : 'CT';
     this.spots = [[2.5, 0, 4], [-2.5, 0, -4], [1.5, 0, -12], [-1.5, 0, -17], [3, 0, -28], [-3.2, 0, 9.5]].map((p) => new THREE.Vector3(...p));
-    this.spots.forEach((p, i) => { const b = g.createActor(enemy, true, '靶子 ' + (i + 1)); b.brain.passive = true; b.home = p; });
+    this.spots.forEach((p, i) => { const b = g.createActor(enemy, true, 'Target ' + (i + 1)); b.brain.passive = true; b.home = p; });
     P.stripForNewGame();
     P.inv.secondary = new WeaponInst('deagle'); P.inv.primary = new WeaponInst(P.team === 'T' ? 'ak47' : 'm4a4');
     P.inv.nades = { he: 1, flash: 2, smoke: 1 }; P.armor = 100; P.helmet = true;
     P.spawnAt(new THREE.Vector3(0, 0, 24), 0); P.spawnTime = 0;
     for (const a of g.actors) if (a !== P) this.spawnDummy(a);
-    HUD.center('靶场训练', '', 4, '无限弹药 · 随处按 B 换枪 · 右侧显示实时散布/速度');
+    HUD.center('Firing Range', '', 4, 'Unlimited ammo · Press B anywhere to swap weapons · Live spread / speed readout on the right');
   }
   spawnDummy(a) {
     a.inv.primary = null; a.inv.secondary = new WeaponInst('glock'); a.armor = Math.random() < 0.5 ? 100 : 0; a.helmet = a.armor > 0 && Math.random() < 0.5;
@@ -1024,7 +1024,7 @@ class ModeRange {
 // ======================================================================
 class ModeComp {
   constructor(g) {
-    this.g = g; this.id = 'comp'; this.title = '爆破竞技'; this.infiniteMoney = false; this.spectateAllowed = true;
+    this.g = g; this.id = 'comp'; this.title = 'Demolition'; this.infiniteMoney = false; this.spectateAllowed = true;
     this.score = { CT: 0, T: 0 }; this.round = 0; this.phase = 'freeze'; this.t = 0; this.roundTime = 115; this.freezeTime = 8; this.buyWindow = 18;
     this.toWin = 9; this.half = 8; this.lossStreak = { CT: 0, T: 0 };
     this.bomb = null; this.bombMesh = null; this.bombLight = null;
@@ -1060,8 +1060,8 @@ class ModeComp {
     for (const a of g.actors) if (a.isBot) g.botBuy(a);
     this.assignTasks();
     HUD.hideDeath(); g.flashAmt = 0; g.deathT = 0;
-    const last = this.round === this.half ? '（上半场最后一局）' : this.score.CT === this.toWin - 1 || this.score.T === this.toWin - 1 ? '（赛点）' : '';
-    g.center((P) => [`第 ${this.round} 回合${last}`, '', 3, P.team === 'T' ? (P.inv.c4 ? '你携带着 C4 —— 前往 A 或 B 包点安放' : '与队友一起攻占包点并安放 C4') : '守住 A / B 包点，阻止 C4 被安放']);
+    const last = this.round === this.half ? ' (last round of the half)' : this.score.CT === this.toWin - 1 || this.score.T === this.toWin - 1 ? ' (match point)' : '';
+    g.center((P) => [`Round ${this.round}${last}`, '', 3, P.team === 'T' ? (P.inv.c4 ? 'You are carrying the C4 — head to site A or B and plant it' : 'Push a site with your team and plant the C4') : 'Hold sites A and B and stop the C4 from being planted']);
     g.openBuyAll();
   }
   halftime() {
@@ -1075,7 +1075,7 @@ class ModeComp {
     this.score = { CT: this.score.T, T: this.score.CT };
     this.lossStreak = { CT: 0, T: 0 };
     g.vm.setTeam(g.player.team);
-    g.center(['交换攻守', '', 3]);
+    g.center(['Switching sides', '', 3]);
   }
   assignTasks() {
     const g = this.g, map = g.map;
@@ -1112,7 +1112,7 @@ class ModeComp {
     const g = this.g;
     if (this.phase === 'freeze') {
       this.t -= dt;
-      if (this.t <= 0) { this.phase = 'live'; this.t = this.roundTime; g.frozen = false; g.noFire = false; g.sound2d(['round_start', 0.5]); g.center(['行动！', '', 1.2]); }
+      if (this.t <= 0) { this.phase = 'live'; this.t = this.roundTime; g.frozen = false; g.noFire = false; g.sound2d(['round_start', 0.5]); g.center(['Go!', '', 1.2]); }
       return;
     }
     if (this.phase === 'post') {
@@ -1199,12 +1199,12 @@ class ModeComp {
     const d = g.dropWeapon(a, null, true);
     B.dropped = true; B.carrier = null; B.drop = d; B.pos.copy(a.pos);
     g.later(1.5, () => { if (B.drop && B.drop.rest) B.pos.copy(B.drop.pos); });
-    g.center((P) => P.team === 'T' ? ['炸弹已掉落', '', 2] : null);
+    g.center((P) => P.team === 'T' ? ['Bomb dropped', '', 2] : null);
   }
   pickupBomb(a) {
     const g = this.g, B = this.bomb; if (!B) return;
     a.inv.c4 = true; B.dropped = false; B.carrier = a; B.drop = null;
-    g.center((P) => P === a ? ['你捡起了 C4', '', 2] : null); a.sfx('magin', 0.4);
+    g.center((P) => P === a ? ['You picked up the C4', '', 2] : null); a.sfx('magin', 0.4);
     if (a.isBot) {
       const site = this.tSite || 'A', s = this.g.map.sites[site];
       a.brain.task = { type: 'route', pts: [s.center.clone()], i: 0, then: { type: 'plant', pos: s.center.clone(), urgent: true } };
@@ -1218,7 +1218,7 @@ class ModeComp {
     this.bombMesh = m.group; this.bombLight = m.light;
     g.playAt('armed', B.pos, { vol: 0.8, ref: 5 });
     a.money += 300; a.mvpFlag = true;
-    g.center(['炸弹已安放', 'win-t', 3, `${site} 包点 · 40 秒后爆炸`]);
+    g.center(['Bomb planted', 'win-t', 3, `Site ${site} · Detonates in 40s`]);
     // 机器人：CT 回防拆弹，T 守包
     const cts = g.actors.filter((x) => x.isBot && x.alive && x.team === 'CT').sort((p, q) => p.pos.distanceTo(B.pos) - q.pos.distanceTo(B.pos));
     cts.forEach((x, i) => { x.brain.task = i === 0 || Math.random() < 0.5 ? { type: 'defuse', pos: B.pos.clone(), urgent: i === 0 } : { type: 'hold', pos: B.pos.clone().add(_g1.set(rand(-4, 4), 0, rand(-4, 4))), look: B.pos.clone().add(_g1.set(0, 1, 0)) }; });
@@ -1261,8 +1261,8 @@ class ModeComp {
     for (const a of g.actors) if (a.team === winner && (a.mvpFlag || !mvp || a.roundKills > mvp.roundKills)) { if (!mvp || a.mvpFlag || a.roundKills > mvp.roundKills) mvp = a; }
     if (mvp) mvp.mvp++;
     for (const a of g.actors) a.mvpFlag = false;
-    const why = { elim: '全歼敌方', time: '时间耗尽', bomb: '目标已摧毁', defuse: '炸弹已拆除' }[reason];
-    g.center([winner === 'CT' ? '反恐精英获胜' : '恐怖分子获胜', winner === 'CT' ? 'win-ct' : 'win-t', 5, `${why}${mvp ? ' · 本局 MVP：' + mvp.name : ''}`]);
+    const why = { elim: 'Enemy team eliminated', time: 'Time ran out', bomb: 'Target destroyed', defuse: 'Bomb defused' }[reason];
+    g.center([winner === 'CT' ? 'Defenders win' : 'Attackers win', winner === 'CT' ? 'win-ct' : 'win-t', 5, `${why}${mvp ? ' · Round MVP: ' + mvp.name : ''}`]);
     g.sound2d((a) => [winner === a.team ? 'round_win' : 'round_lose', 0.55]);
     g.noFire = false;
   }
@@ -1270,7 +1270,7 @@ class ModeComp {
     const g = this.g;
     this.phase = 'over'; g.over = true; g.frozen = true; g.noFire = true;
     const w = this.score.CT > this.score.T ? 'CT' : 'T';
-    g.center((P) => [P.team === w ? '胜利！' : '失败', w === 'CT' ? 'win-ct' : 'win-t', 9, `${w === 'CT' ? '反恐精英' : '恐怖分子'} ${this.score[w]} : ${this.score[w === 'CT' ? 'T' : 'CT']}`]);
+    g.center((P) => [P.team === w ? 'Victory!' : 'Defeat', w === 'CT' ? 'win-ct' : 'win-t', 9, `${w === 'CT' ? 'Defenders' : 'Attackers'} ${this.score[w]} : ${this.score[w === 'CT' ? 'T' : 'CT']}`]);
     g.sound2d((a) => [a.team === w ? 'round_win' : 'round_lose', 0.6]);
   }
   onKill(v, k) { void v; void k; }

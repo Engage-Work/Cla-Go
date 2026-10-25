@@ -73,7 +73,7 @@ const HUD = (() => {
       const el = document.createElement('div');
       el.className = 'kf' + (o.mine ? ' mine' : '');
       const nm = (a) => a ? `<span class="c${a.team}">${a.name}</span>` : '';
-      el.innerHTML = `${o.killer ? nm(o.killer) : ''}<span class="w">${o.weapon}</span>${o.wallbang ? '<span class="wb">穿</span>' : ''}${o.hs ? '<span class="hs">爆头</span>' : ''}${nm(o.victim)}`;
+      el.innerHTML = `${o.killer ? nm(o.killer) : ''}<span class="w">${o.weapon}</span>${o.wallbang ? '<span class="wb">WB</span>' : ''}${o.hs ? '<span class="hs">HS</span>' : ''}${nm(o.victim)}`;
       E.killfeed.prepend(el);
       feed.push({ el, t: o.mine ? 9 : 6 });
       while (E.killfeed.children.length > 6) E.killfeed.lastChild.remove();
@@ -115,8 +115,8 @@ const HUD = (() => {
         const ah = g.rayActors(e.x, e.y, e.z, f, wh ? wh.t : 80, new Set([P]));
         if (ah && ah.actor.team !== P.team && !Effects.smokeBlocks(e, _hv.copy(e).addScaledVector(f, ah.t))) {
           ctx.font = '700 13px "Segoe UI", "Microsoft YaHei", sans-serif';
-          ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText('敌人  ' + ah.actor.name, W / 2 + 1, H / 2 + 41);
-          ctx.fillStyle = '#ff5a4a'; ctx.fillText('敌人  ' + ah.actor.name, W / 2, H / 2 + 40);
+          ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText('Enemy  ' + ah.actor.name, W / 2 + 1, H / 2 + 41);
+          ctx.fillStyle = '#ff5a4a'; ctx.fillText('Enemy  ' + ah.actor.name, W / 2, H / 2 + 40);
         }
       }
     },
@@ -154,7 +154,7 @@ const HUD = (() => {
       const nd = GRENADE_ORDER.filter((k) => I.nades[k] > 0).map((k) => WEAPONS[k].short + (I.nades[k] > 1 ? '×' + I.nades[k] : '')).join(' ');
       if (nd) rows.push(ws(4, nd, a.slot === 'nade'));
       if (I.c4) rows.push(ws(5, 'C4', a.slot === 'c4'));
-      if (I.defuser) rows.push(`<div class="ws"><b>✂</b>拆弹器</div>`);
+      if (I.defuser) rows.push(`<div class="ws"><b>✂</b>Defuse Kit</div>`);
       setHTML('weaponbar', rows.join(''));
       // 金钱/购买
       const md = g.mode;
@@ -181,16 +181,16 @@ const HUD = (() => {
       show('scope', !!(a.alive && a.scoped && def && def.scope));
       // 进度条（安放/拆除）
       let prog = null;
-      if (a.planting) prog = ['正在安放炸弹…', a.plantT / 3.2];
-      else if (a.defusing) prog = [a.inv.defuser ? '正在拆除炸弹（拆弹器）…' : '正在拆除炸弹…', a.defuseT / (a.inv.defuser ? 5 : 10)];
+      if (a.planting) prog = ['Planting bomb…', a.plantT / 3.2];
+      else if (a.defusing) prog = [a.inv.defuser ? 'Defusing bomb (kit)…' : 'Defusing bomb…', a.defuseT / (a.inv.defuser ? 5 : 10)];
       show('progress', !!prog);
       if (prog) { setText('progressLabel', prog[0]); E.progressBar.style.width = clamp(prog[1] * 100, 0, 100) + '%'; }
       // 网络图
       if (S.showFps) {
         const sp = Math.round(a.hspeed() / U);
         let s = `${g.fps.toFixed(0)} fps   ${sp} u/s`;
-        if (g.client) s += g.net.rtt != null ? `   延迟 ${g.net.rtt}ms` : '   连接中…';
-        if (md.id === 'range') s += `\n散布 ${a.inaccuracy().toFixed(1)} mrad\n后坐序号 ${a.recoilIdx.toFixed(1)}\n${a.sliding ? '滑铲中' : a.sprinting ? '冲刺' : a.ducked ? '下蹲' : a.onGround ? '' : '空中'}`;
+        if (g.client) s += g.net.rtt != null ? `   Ping ${g.net.rtt}ms` : '   Connecting…';
+        if (md.id === 'range') s += `\nSpread ${a.inaccuracy().toFixed(1)} mrad\nRecoil index ${a.recoilIdx.toFixed(1)}\n${a.sliding ? 'Sliding' : a.sprinting ? 'Sprinting' : a.ducked ? 'Crouching' : a.onGround ? '' : 'Airborne'}`;
         setText('netgraph', s);
       } else setText('netgraph', '');
       // 雷达
@@ -237,9 +237,9 @@ const HUD = (() => {
     },
     areaName(g, p) {
       const pts = g.map.points; let best = '', bd = 1e9;
-      const names = { t_spawn: 'T 出生点', ct_spawn: 'CT 出生点', top_mid: 'T 中路', mid: '中路', xbox: '中路木箱', mid_doors: '中门', ct_mid: 'CT 中路',
-        outside_long: 'A 大外', long_doors: 'A 大门', long: 'A 大道', long_corner: 'A 大拐角', a_ramp: 'A 坡', a_site: 'A 包点', a_short: 'A 小', short: 'A 小道', ct_to_a: 'CT → A',
-        upper_tunnel: 'B 外', b_tunnel: 'B 洞', lower_tunnel: '下水道', b_exit: 'B 洞口', b_site: 'B 包点', b_plat: 'B 平台', b_doors: 'B 门', b_window: 'B 窗' };
+      const names = { t_spawn: 'Attacker Spawn', ct_spawn: 'Defender Spawn', top_mid: 'Attacker Mid', mid: 'Mid', xbox: 'Mid Crates', mid_doors: 'Mid Doors', ct_mid: 'Defender Mid',
+        outside_long: 'A Outside', long_doors: 'A Long Doors', long: 'A Long', long_corner: 'A Long Corner', a_ramp: 'A Ramp', a_site: 'A Site', a_short: 'A Short End', short: 'A Short', ct_to_a: 'Defender → A',
+        upper_tunnel: 'B Outer', b_tunnel: 'B Tunnel', lower_tunnel: 'Sewers', b_exit: 'B Tunnel Exit', b_site: 'B Site', b_plat: 'B Platform', b_doors: 'B Doors', b_window: 'B Window' };
       for (const k in pts) { const d = pts[k].distanceToSquared(p); if (d < bd) { bd = d; best = names[k] || k; } }
       return best;
     },
@@ -252,12 +252,12 @@ const HUD = (() => {
       show('scoreboard', on);
       if (!on) return;
       const md = g.mode, P = g.player;
-      const row = (a) => `<tr class="${a === P ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td><span class="c${a.team}">${a.name}</span>${a.inv.c4 && a.team === P.team ? ' 💣' : ''}${a.inv.defuser && a.team === P.team ? ' ✂' : ''}</td><td class="n">${a.kills}</td><td class="n">${a.assists}</td><td class="n">${a.deaths}</td><td class="n">${'★'.repeat(Math.min(a.mvp, 5))}${a.mvp > 5 ? a.mvp : ''}</td><td class="n">${a.team === P.team && !md.infiniteMoney ? '$' + a.money : ''}</td><td class="n">${a.isBot ? 'BOT' : a.ping != null ? a.ping + 'ms' : g.net ? (a === P ? '你' : '玩家') : '本机'}</td></tr>`;
+      const row = (a) => `<tr class="${a === P ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td><span class="c${a.team}">${a.name}</span>${a.inv.c4 && a.team === P.team ? ' 💣' : ''}${a.inv.defuser && a.team === P.team ? ' ✂' : ''}</td><td class="n">${a.kills}</td><td class="n">${a.assists}</td><td class="n">${a.deaths}</td><td class="n">${'★'.repeat(Math.min(a.mvp, 5))}${a.mvp > 5 ? a.mvp : ''}</td><td class="n">${a.team === P.team && !md.infiniteMoney ? '$' + a.money : ''}</td><td class="n">${a.isBot ? 'BOT' : a.ping != null ? a.ping + 'ms' : g.net ? (a === P ? 'You' : 'Player') : 'Local'}</td></tr>`;
       const tbl = (t) => {
         const list = g.actors.filter((x) => x.team === t).sort((x, y) => y.kills - x.kills || x.deaths - y.deaths);
-        return `<h3><span class="c${t}">${t === 'CT' ? '反恐精英' : '恐怖分子'}</span><span class="c${t}">${md.score ? md.score[t] : ''}</span></h3><table><tr><th>玩家</th><th class="n">击杀</th><th class="n">助攻</th><th class="n">死亡</th><th class="n">MVP</th><th class="n">金钱</th><th class="n">延迟</th></tr>${list.map(row).join('')}</table>`;
+        return `<h3><span class="c${t}">${t === 'CT' ? 'Defenders' : 'Attackers'}</span><span class="c${t}">${md.score ? md.score[t] : ''}</span></h3><table><tr><th>Player</th><th class="n">Kills</th><th class="n">Assists</th><th class="n">Deaths</th><th class="n">MVP</th><th class="n">Money</th><th class="n">Ping</th></tr>${list.map(row).join('')}</table>`;
       };
-      setHTML('scoreboard', `<div style="text-align:center;color:#a9a49a;font-size:13px;letter-spacing:2px;margin-bottom:6px">${md.title} · 炽沙小镇 · 机器人难度：${DIFFS[g.opts.diff].label}</div>` + tbl('CT') + tbl('T'));
+      setHTML('scoreboard', `<div style="text-align:center;color:#a9a49a;font-size:13px;letter-spacing:2px;margin-bottom:6px">${md.title} · Sunscorch · Bot skill: ${DIFFS[g.opts.diff].label}</div>` + tbl('CT') + tbl('T'));
     },
 
     // ---------------- 购买菜单 ----------------
@@ -274,11 +274,11 @@ const HUD = (() => {
         const items = cat.items.map((id, ii) => {
           const it = WEAPONS[id] || EQUIP[id];
           const st = g.buyState(P, id);
-          return `<div class="it ${st.ok ? '' : 'no'} ${st.own ? 'own' : ''} ${buyCat === ci ? 'hot' : ''}" data-buy="${id}"><div class="nm">${it.name}</div><div class="pr">${md.infiniteMoney ? '免费' : '$' + it.price}</div><div class="k">${ci + 1}-${ii + 1}</div></div>`;
+          return `<div class="it ${st.ok ? '' : 'no'} ${st.own ? 'own' : ''} ${buyCat === ci ? 'hot' : ''}" data-buy="${id}"><div class="nm">${it.name}</div><div class="pr">${md.infiniteMoney ? 'Free' : '$' + it.price}</div><div class="k">${ci + 1}-${ii + 1}</div></div>`;
         }).join('');
         return `<div class="col"><h4>${ci + 1}. ${cat.title}</h4>${items}</div>`;
       }).join('');
-      setHTML('buymenu', `<div class="bm"><div class="bmh"><div class="t">购买菜单</div><div class="m">${md.infiniteMoney ? '$ ∞' : '$' + P.money}</div></div><div class="cols">${cols}</div><div class="foot">鼠标点击购买，或按 数字键 选择分类+物品 · B / Esc 关闭 · ${md.buyTimeLeft ? '剩余购买时间 ' + Math.ceil(md.buyTimeLeft()) + ' 秒' : ''}</div></div>`);
+      setHTML('buymenu', `<div class="bm"><div class="bmh"><div class="t">Buy Menu</div><div class="m">${md.infiniteMoney ? '$ ∞' : '$' + P.money}</div></div><div class="cols">${cols}</div><div class="foot">Click to buy, or press number keys to pick a category + item · B / Esc to close · ${md.buyTimeLeft ? 'Buy time left: ' + Math.ceil(md.buyTimeLeft()) + 's' : ''}</div></div>`);
     },
     updateBuy(g) {
       if (!buyOpen) return;

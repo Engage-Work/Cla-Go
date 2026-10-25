@@ -403,9 +403,9 @@ const Engine = {
   openSettings() { $('settings').classList.remove('hidden'); this.renderSettings(); },
   SETTINGS_UI: {
     mouse: [
-      { k: 'sens', l: 'Mouse sensitivity', t: 'range', min: 0.1, max: 8, step: 0.01, d: 'Uses the classic FPS yaw scale (0.022° per unit), so you can reuse the sensitivity you are used to' },
+      { k: 'sens', l: 'Mouse sensitivity', t: 'range', min: 0.1, max: 20, step: 0.05, d: 'Default 5. Uses the classic FPS scale of 0.022° per pixel, so a sensitivity from another shooter carries over' },
       { k: 'zoomSens', l: 'Scope sensitivity multiplier', t: 'range', min: 0.3, max: 2, step: 0.01 },
-      { k: 'rawInput', l: 'Raw mouse input', t: 'bool', d: 'Bypasses OS mouse acceleration (same as m_rawinput 1)' },
+      { k: 'rawInput', l: 'Raw mouse input', t: 'bool', d: 'Turns off your system’s pointer acceleration (like m_rawinput 1). Most players leave it off' },
       { k: 'invertY', l: 'Invert Y axis', t: 'bool' },
       { k: 'moveMode', l: 'Shift key', t: 'select', o: [['walk', 'Walk (Alt does nothing)'], ['sprint', 'Sprint (Alt to walk)']] },
       { k: 'slide', l: 'Sliding', t: 'bool', d: 'Press C/Ctrl while running near full speed to slide' },

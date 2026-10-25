@@ -63,8 +63,12 @@ function $(id) { return document.getElementById(id); }
 //  设置（localStorage 仅作便利，失败不影响运行）
 // ======================================================================
 const SETTINGS_KEY = 'sandstorm_fps_settings_v1';
+// Sensitivity uses the classic 0.022° per count, but in a browser a count is a pointer pixel, and most
+// people play with their system's pointer acceleration on: 5 turns about 0.11° per pixel, a full turn
+// in roughly two sweeps of a trackpad. Raw input (no acceleration) stays available for those who want it.
 const DEFAULT_SETTINGS = {
-  sens: 1.6, zoomSens: 1.0, rawInput: true, invertY: false,
+  version: 2,
+  sens: 5, zoomSens: 1.0, rawInput: false, invertY: false,
   moveMode: 'walk', slide: true, toggleCrouch: false, kbLock: true, knife: 'butterfly',
   crossStyle: 'static', crossSize: 5, crossGap: 3, crossThick: 2, crossColor: '#3dff7f', crossDot: false, crossOutline: true,
   hitmarker: true,
@@ -79,6 +83,13 @@ const Settings = {
     try {
       const s = localStorage.getItem(SETTINGS_KEY);
       if (s) Object.assign(this.data, JSON.parse(s));
+      // Settings saved before version 2 kept the old defaults (1.6 with raw input), which made aiming
+      // crawl; move them to the new ones, keeping any sensitivity someone chose themselves.
+      if (!(this.data.version >= 2)) {
+        if (this.data.sens === 1.6) this.data.sens = DEFAULT_SETTINGS.sens;
+        this.data.rawInput = DEFAULT_SETTINGS.rawInput;
+        this.data.version = DEFAULT_SETTINGS.version;
+      }
       // 早期版本的取值已废弃，未知值回落到默认
       if (this.data.moveMode !== 'walk' && this.data.moveMode !== 'sprint') this.data.moveMode = DEFAULT_SETTINGS.moveMode;
     } catch (e) { /* 隐私模式等 */ }

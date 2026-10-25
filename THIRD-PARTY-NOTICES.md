@@ -22,6 +22,14 @@ The files above are three.js itself and its official examples/js code. They were
   (*A Practical Analytic Model for Daylight*); the three.js implementation is MIT licensed.
 - `UnrealBloomPass.js`: the bloom effect follows the Unreal Engine post-processing documentation; the three.js implementation is MIT licensed.
 
+## Approach references (no code copied)
+
+- **Dive** by Mugen87 (<https://github.com/Mugen87/dive>), MIT License, Copyright © 2019 Dive authors.
+  Its first-person weapons animate as short keyframed clips of the weapon's position and rotation
+  (for example its blaster reload dips and tilts the gun, holds, and returns). The viewmodel reload in
+  `js/viewmodel.js` follows the same idea (keyframed transforms sampled over the reload time), applied to this
+  project's own generated gun meshes; the keyframes, timings and code are original to this project.
+
 ## Full MIT License text
 
 ```

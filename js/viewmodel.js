@@ -108,7 +108,13 @@ class ViewModel {
   }
   setWeapon(id) {
     if (this.curId === id) return;
-    if (this.cur) this.root.remove(this.cur.group);
+    if (this.cur) {
+      // A reload interrupted by a switch must not leave the mag or bolt displaced on the holstered model
+      const o = this.cur;
+      if (o.mag && o.magBase) { o.mag.position.copy(o.magBase); o.mag.visible = true; }
+      if (o.bolt && o.boltBase) { o.bolt.position.copy(o.boltBase); o.bolt.rotation.copy(o.boltRot); }
+      this.root.remove(o.group);
+    }
     this.cur = this.model(id); this.curId = id;
     this.root.add(this.cur.group);
     if (this.cur.pin) this.cur.pin.visible = true;
@@ -206,32 +212,50 @@ class ViewModel {
     const L = _vmL.copy(m.guard);
     let leftVis = !(type === 'knife' || type === 'grenade');
     let magOff = 0, magVis = true, magZ = 0;
-    // 换弹
+    // Reload: keyframed pose (lift the gun and cant the mag well toward you), the mag drops out and the new
+    // one comes up from below, the left hand does the work, and an empty gun gets its bolt or slide
+    // released. Keys are fractions of the weapon's reload time (WEAPONS[id].reload): mag out with the
+    // 'magout' sound at 0.2, seated with 'magin' at 0.6, at rest again before the reload ends.
+    let boltZ = 0, boltUp = 0;
     if (this.reload) {
-      const r = this.reload; r.t += dt / r.dur; const T = r.t;
+      const r = this.reload; r.t += dt / r.dur; const T = Math.min(r.t, 1);
       const snd = (key, at, name, vol = 0.55) => { if (!r.s[key] && T >= at) { r.s[key] = 1; Sound.play(name, { vol }); } };
-      const tilt = smoothstep(0, 0.14, T) * (1 - smoothstep(0.82, 0.97, T));
-      const pistol = type === 'pistol';
-      rot.z += tilt * (pistol ? 0.3 : 0.5); rot.x += tilt * 0.14; pos.x -= tilt * 0.025; pos.y -= tilt * 0.012; rot.y -= tilt * 0.12;
-      if (T < 0.45) { magOff = T < 0.2 ? 0 : -Math.pow((T - 0.2) / 0.25, 2) * 0.4; magVis = T < 0.42; }
-      else if (T < 0.64) { const k = easeOut(seg(T, 0.45, 0.64)); magOff = -(1 - k) * 0.22; magZ = (1 - k) * 0.04; }
+      const once = (key, at) => { if (r.s[key] || T < at) return false; r.s[key] = 1; return true; };
+      const pistol = type === 'pistol', sniper = type === 'sniper';
+      const charge = r.empty && (pistol || !!m.bolt);
+      const v = sampleKeys(ViewModel.RELOAD[pistol ? 'pistol' : 'rifle'][charge ? 'empty' : 'tac'], T, _rlv);
+      rot.x += v[1]; rot.y += v[2]; rot.z += v[3]; pos.x += v[4]; pos.y += v[5]; pos.z += v[6];
+      // Old mag falls away (accelerating), new one rises into the well
+      if (T >= 0.2 && T < 0.4) { const k = (T - 0.2) / 0.2; magOff = -k * k * 0.45; magVis = k < 0.75; }
+      else if (T >= 0.4 && T < 0.6) { const k = easeOut(seg(T, 0.4, 0.6)); magOff = -(1 - k) * 0.2; magZ = (1 - k) * 0.035; }
       const mw = m.magWell || m.guard;
-      if (T < 0.16) L.lerpVectors(m.guard, _vmT.copy(mw).add(_vmT2.set(0, -0.07, 0)), seg(T, 0.06, 0.16));
-      else if (T < 0.45) L.copy(mw).add(_vmT.set(0, -0.07 + magOff, 0));
-      else if (T < 0.64) L.copy(mw).add(_vmT.set(0, -0.07 + magOff, magZ));
-      else if (T < 0.74) { L.copy(mw).add(_vmT.set(0, -0.06, 0)); rot.x += Math.sin(seg(T, 0.64, 0.74) * Math.PI) * 0.03; }
-      else if (r.empty && !pistol && m.bolt) {
-        const k = seg(T, 0.74, 0.86);
-        L.lerpVectors(_vmT.copy(mw).add(_vmT2.set(0, -0.06, 0)), _vmT2.copy(m.bolt.position || mw).add(_vmT3.set(0.03, 0.0, 0.02)), smoothstep(0, 0.4, k));
-        if (k > 0.5) L.z += Math.sin((k - 0.5) * 2 * Math.PI) * 0.05;
-        if (T > 0.86) L.lerpVectors(_vmT.copy(m.bolt.position).add(_vmT2.set(0.03, 0, 0.02)), m.guard, seg(T, 0.86, 0.97));
-      } else L.lerpVectors(_vmT.copy(mw).add(_vmT2.set(0, -0.06, 0)), m.guard, seg(T, 0.74, 0.92));
+      const under = _vmT.copy(mw).add(_vmT2.set(0, pistol ? -0.04 : -0.07, 0));
+      const low = _vmT3.copy(under).add(_vmT2.set(0, -0.2, 0.035));
+      const rest = charge && T >= 0.66 ? null : m.guard;
+      if (T < 0.14) L.lerpVectors(m.guard, under, smoothstep(0.02, 0.14, T));
+      else if (T < 0.2) L.copy(under);
+      else if (T < 0.4) L.lerpVectors(under, low, smoothstep(0.2, 0.4, T));   // drops to the pouch for a fresh mag
+      else if (T < 0.66) L.copy(under).add(_vmT2.set(0, magOff, magZ));      // carries it up and slaps it home
+      else if (rest) L.lerpVectors(under, rest, smoothstep(0.66, pistol ? 0.8 : 0.86, T));
+      else {
+        // Empty: rack the bolt (rifles, AWP) or rack the slide (pistols), then back to the grip
+        const hold = pistol ? _vmT3.set(-0.04, 0.045, 0.05) : _vmT3.copy(m.boltBase).add(_vmT2.set(sniper ? 0.05 : 0.03, sniper ? -0.01 : 0, 0.02));
+        if (pistol) { boltZ = 0; if (T > 0.74 && T < 0.8) hold.z += 0.03 * seg(T, 0.74, 0.79); if (T >= 0.78) this.slideBack = 0; }
+        else if (sniper) { boltUp = smoothstep(0.7, 0.74, T) * (1 - smoothstep(0.84, 0.88, T)); boltZ = 0.08 * smoothstep(0.74, 0.79, T) * (1 - smoothstep(0.8, 0.84, T)); }
+        else boltZ = 0.045 * smoothstep(0.74, 0.79, T) * (1 - smoothstep(0.8, 0.815, T));
+        hold.z += boltZ;
+        if (T < 0.74) L.lerpVectors(under, hold, smoothstep(0.66, 0.74, T));
+        else if (T < 0.84) L.copy(hold);
+        else L.lerpVectors(hold, m.guard, smoothstep(0.84, 0.95, T));
+      }
+      if (once('seat', 0.6)) { this.kickRX.v += 3; this.kickZ.v += 0.5; }
+      if (charge && once('rack', 0.8)) this.kickRX.v += 1.5;
       snd('o', 0.18, 'magout'); snd('i', 0.6, 'magin');
-      if (r.empty) snd('b', pistol ? 0.8 : 0.8, pistol ? 'slideback' : (id === 'awp' ? 'awpbolt' : 'bolt'));
-      if (r.empty && T > 0.8) this.slideBack = 0;
-      if (T >= 1) this.reload = null;
+      if (charge) snd('b', sniper ? 0.7 : pistol ? 0.76 : 0.74, pistol ? 'slideback' : sniper ? 'awpbolt' : 'bolt');
+      if (r.t >= 1) this.reload = null;
     }
     if (m.mag && m.magBase) { m.mag.position.copy(m.magBase); m.mag.position.y += magOff; m.mag.position.z += magZ; m.mag.visible = magVis; }
+    if (m.bolt && m.boltBase && this.bolt <= -1) { m.bolt.position.copy(m.boltBase); m.bolt.position.z += boltZ; m.bolt.rotation.copy(m.boltRot); m.bolt.rotation.z += boltUp * 1.2; }
     // AWP 拉栓
     if (this.bolt > -1 && m.bolt) {
       this.bolt += dt / 0.95;
@@ -392,7 +416,27 @@ function sampleKeys(keys, t, out) {
   out[0] = t;
   return out;
 }
-const _bfv = [];
+const _bfv = [], _rlv = [];
+// Reload pose keys: [T (fraction of reload time), rx, ry, rz, x, y, z] added to the hold pose. Negative rz cants
+// the gun so its underside (mag well) turns toward the screen centre; 'tac' still has a round chambered,
+// 'empty' adds the bolt/slide release around 0.74-0.82.
+{
+  const Z = [0, 0, 0, 0, 0, 0];
+  const rifleMag = [[0, ...Z], [0.13, 0.14, 0.12, -0.5, -0.03, 0.04, 0.02], [0.2, 0.12, 0.12, -0.52, -0.03, 0.035, 0.02], [0.24, 0.17, 0.12, -0.55, -0.03, 0.042, 0.02],
+    [0.52, 0.13, 0.14, -0.52, -0.035, 0.04, 0.02], [0.6, 0.22, 0.15, -0.47, -0.035, 0.05, 0.015], [0.68, 0.13, 0.12, -0.45, -0.03, 0.04, 0.02]];
+  const pistolMag = [[0, ...Z], [0.12, 0.1, 0.06, -0.35, -0.015, 0.03, 0.03], [0.22, 0.14, 0.06, -0.38, -0.015, 0.035, 0.03],
+    [0.5, 0.1, 0.08, -0.36, -0.02, 0.03, 0.03], [0.6, 0.18, 0.08, -0.32, -0.02, 0.04, 0.03], [0.68, 0.1, 0.06, -0.3, -0.015, 0.03, 0.03]];
+  ViewModel.RELOAD = {
+    rifle: {
+      tac: [...rifleMag, [0.9, ...Z]],
+      empty: [...rifleMag, [0.74, 0.06, 0.05, -0.14, -0.01, 0.025, 0.02], [0.8, 0.04, 0.05, -0.12, -0.01, 0.02, 0.03], [0.83, 0.1, 0.05, -0.12, -0.01, 0.03, 0.015], [0.95, ...Z]],
+    },
+    pistol: {
+      tac: [...pistolMag, [0.86, ...Z]],
+      empty: [...pistolMag, [0.76, 0.06, 0.12, -0.15, -0.025, 0.03, 0.03], [0.8, 0.16, 0.12, -0.12, -0.02, 0.04, 0.03], [0.94, ...Z]],
+    },
+  };
+}
 // 蝴蝶刀关键帧：[时间, α刀刃, β咬柄, 手腕rx, ry, rz, 位移x, y, z]；合拢 = (π, π)，打开 = (0, 0) ≡ (2π, 2π)
 {
   const PI = Math.PI, P2 = PI * 2;

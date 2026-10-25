@@ -1,7 +1,7 @@
 'use strict';
 // ======================================================================
-//  actor.js —— 玩家与机器人共用：经典 FPS 移动物理、蹲/跳/滑铲、
-//                武器状态机（开火/后坐/散布/换弹/切枪/刀/投掷/C4）
+//  actor.js - shared by players and bots: classic FPS movement physics, crouch/jump/slide,
+//                weapon state machine (fire/recoil/spread/reload/switch/knife/throw/C4)
 // ======================================================================
 let ACTOR_SEQ = 0;
 const BOT_NAMES = {
@@ -20,7 +20,7 @@ class Actor {
     this.game = game;
     this.id = ++ACTOR_SEQ;
     this.name = o.name; this.team = o.team; this.isBot = !!o.isBot; this.isPlayer = !!o.isPlayer;
-    // 联机：remote = 房主侧代表加入者的角色（位置来自对方本机模拟），pid = 对方连接 id
+    // Multiplayer: remote = host-side actor standing in for a joiner (position comes from the joiner's local simulation), pid = the peer's connection id
     this.remote = !!o.remote; this.pid = o.pid || 0; this.spawnSeq = 0; this.inq = []; this.viewT = null; this.ping = null; this._vy = 0;
     this.pos = new THREE.Vector3(); this.prevPos = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.renderPos = new THREE.Vector3();
@@ -42,7 +42,7 @@ class Actor {
     this.planting = false; this.plantT = 0; this.defusing = false; this.defuseT = 0;
     this.knifeCombo = 0; this.blind = 0; this.blindMax = 0;
     this.cmd = newCmd();
-    this.events = [];          // 第一人称动画事件
+    this.events = [];          // first-person animation events
     this.model = null;
     this.brain = null;
     this.lastAttacker = null; this.lastHitTime = -9;
@@ -61,7 +61,7 @@ class Actor {
   forward(out) { return dirFromAngles(this.yaw, this.pitch, out); }
   hspeed() { return Math.hypot(this.vel.x, this.vel.z); }
 
-  // ================= 出生 / 装备 =================
+  // ================= Spawn / loadout =================
   spawnAt(p, yaw) {
     this.pos.copy(p); this.prevPos.copy(p); this.renderPos.copy(p); this.vel.set(0, 0, 0);
     this.yaw = yaw; this.pitch = 0; this.spawnSeq++;
@@ -90,7 +90,7 @@ class Actor {
     this.inv.c4 = false; this.inv.defuser = false; this.armor = 0; this.helmet = false;
   }
 
-  // ================= 切枪 =================
+  // ================= Weapon switch =================
   slotWeapon(slot) {
     const I = this.inv;
     if (slot === 'primary') return I.primary;
@@ -127,7 +127,7 @@ class Actor {
   quickSwitch() { if (!this.switchTo(this.lastSlot)) { this.switchTo(this.inv.primary ? 'primary' : this.inv.secondary ? 'secondary' : 'knife'); } }
   bestSlot() { return this.inv.primary ? 'primary' : this.inv.secondary ? 'secondary' : 'knife'; }
 
-  // ================= 每 tick 模拟 =================
+  // ================= Per-tick simulation =================
   simulate(dt) {
     if (!this.alive) return;
     const c = this.cmd, g = this.game, W = g.world;
@@ -152,7 +152,7 @@ class Actor {
     this.sprinting = !!c.sprint && c.fwd > 0 && this.onGround && !this.ducked && !this.sliding && !this.scoped && !frozen && this.def.type !== 'c4';
     if (this.sprinting) this.sprintRecover = 0.16; else this.sprintRecover = Math.max(0, this.sprintRecover - dt);
 
-    // 滑铲触发：接近满速奔跑时按蹲
+    // Slide trigger: crouch while running near full speed
     const slideOn = this.isPlayer ? Settings.data.slide : true;
     if (c.duckPressed && slideOn && this.onGround && !this.sliding && this.slideCD <= 0 && !c.walk && !frozen) {
       const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -160,7 +160,7 @@ class Actor {
       if (hs >= def.speed * 0.78 && along > hs * 0.5) this.startSlide(hs, def);
     }
 
-    // 期望方向
+    // Wish direction
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     let fwd = frozen ? 0 : c.fwd, side = frozen ? 0 : c.side;
     let wx = -sy * fwd + cy * side, wz = -cy * fwd - sy * side;
@@ -171,7 +171,7 @@ class Actor {
     else if (c.walk) wish *= PHYS.walkMul;
     else if (this.sprinting) wish *= PHYS.sprintMul;
 
-    // 起跳
+    // Jump
     if (c.jumpPressed && this.onGround && !frozen) {
       this.vel.y = PHYS.jumpImpulse;
       if (this.sliding) { this.vel.x *= 1.04; this.vel.z *= 1.04; this.endSlide(); this.events.push({ t: 'slidejump' }); }
@@ -195,11 +195,11 @@ class Actor {
     }
     this.categorize();
 
-    // 滑铲视觉
+    // Slide visuals
     this.slideAmt = clamp(this.slideAmt + (this.sliding ? dt / 0.1 : -dt / 0.22), 0, 1);
     if (this.sliding && Math.random() < dt * 30) Effects.slideDust(this.pos, this.vel);
 
-    // 脚步
+    // Footsteps
     if (this.onGround && !this.sliding) {
       const s = this.hspeed();
       this.stepDist += s * dt;
@@ -220,7 +220,7 @@ class Actor {
     const ns = Math.max(0, sp - drop) / sp;
     v.x *= ns; v.z *= ns;
   }
-  // 加速基准 = max(250u, wishspeed)，因此静步/蹲走/急停都同样“跟手”
+  // Acceleration base = max(250u, wishspeed), so slow-walk/crouch-walk/counter-strafe all feel equally responsive
   accelerate(wx, wz, wish, accel, dt) {
     const cur = this.vel.x * wx + this.vel.z * wz;
     const add = wish - cur; if (add <= 0) return;
@@ -265,7 +265,7 @@ class Actor {
     const p0 = T.a.copy(p), v0 = T.b.copy(v);
     this.slideMove(dt);
     const pD = T.c.copy(p), vD = T.d.copy(v);
-    // 尝试上台阶
+    // Try stepping up
     p.copy(p0); v.copy(v0);
     let tr = W.traceHull(p.x, p.y, p.z, p.x, p.y + PHYS.stepHeight, p.z, hw, h);
     const up = tr.frac >= 1 ? PHYS.stepHeight : Math.max(0, tr.frac * PHYS.stepHeight - 0.001);
@@ -371,14 +371,14 @@ class Actor {
     if (this.isPlayer) { Sound.play(name, { vol }); this.game.emitSnd(name, this.pos, o); }
     else this.game.playAt(name, this.pos, o);
   }
-  // 只给操作者自己听的 2D 提示音；远端玩家转发给对方
+  // 2D cue sounds audible only to the operator; for remote players they are forwarded to the peer
   sfx(name, vol, rate) {
     if (this.isPlayer) Sound.play(name, rate ? { vol, rate } : { vol });
     else if (this.remote) this.events.push({ t: 's2', n: name, v: vol, r: rate });
   }
 
-  // ================= 联机（房主侧的远端玩家） =================
-  // 位置 / 姿态照搬加入者本机模拟的结果，顺带补出跳跃、落地、滑铲的声音
+  // ================= Multiplayer (host-side remote players) =================
+  // Position/pose copied from the joiner's local simulation; jump, land and slide sounds are filled in on top
   netApply(m) {
     const wasGround = this.onGround, wasSlide = this.sliding, vy = this._vy;
     this.pos.set(m.p[0], m.p[1], m.p[2]); this.vel.set(m.v[0], m.v[1], m.v[2]);
@@ -391,7 +391,7 @@ class Actor {
     if (this.sliding && !wasSlide) { this.sound('slidemove', 0.55, 0.8); this.game.noise(this, this.pos, 16); }
     this._vy = this.vel.y;
   }
-  // 代替 simulate：只推进计时器和脚步声（机器人靠脚步声“听见”人）
+  // Replaces simulate: only advances timers and footstep sounds (bots 'hear' players via footsteps)
   netSim(dt) {
     if (!this.alive) return;
     this.spawnProtect = Math.max(0, this.spawnProtect - dt);
@@ -411,7 +411,7 @@ class Actor {
     }
   }
 
-  // ================= 武器 =================
+  // ================= Weapons =================
   inaccuracy() {
     const def = this.def;
     if (!def.inaccStand) return 0;
@@ -492,7 +492,7 @@ class Actor {
     if (def.scope && this.scoped) { this.rezoom = this.scoped; this.scoped = 0; }
     const eye = this.eyePos(this._t.b);
     if (g.net && g.net.host) g.net.emit({ t: 'shot', a: this.id, o: nv(eye), d: nv(dir), w: def.id });
-    // 远端玩家开枪：按对方屏幕上看到的位置判定（延迟补偿）
+    // Remote player fires: hit-test against the position seen on the peer's screen (lag compensation)
     if (this.remote && g.net) g.net.rewind(this, () => g.fireBullet(this, eye, dir, def));
     else g.fireBullet(this, eye, dir, def);
     g.weaponFired(this, def);

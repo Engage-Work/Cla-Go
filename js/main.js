@@ -1,7 +1,7 @@
 'use strict';
 // ======================================================================
-//  main.js —— 引擎启动：渲染器、天空/光照/环境贴图、后处理、
-//              菜单与设置、主循环（128 tick 固定步长 + 插值渲染）
+//  main.js -- engine bootstrap: renderer, sky/lighting/environment map, post-processing,
+//              menus and settings, main loop (128 tick fixed step + interpolated rendering)
 // ======================================================================
 const QUALITY = {
   low:    { label: 'Low',   pr: 0.75, shadow: 1024, msaa: 0, bloom: false, fxaa: true },
@@ -74,7 +74,7 @@ const Engine = {
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.setSize(innerWidth, innerHeight);
     this.isGL2 = r.capabilities.isWebGL2;
-    // 首次运行：按显卡自动选择画质（集显/软件渲染降档）
+    // First run: auto-pick quality from the GPU (integrated / software rendering drops a tier)
     try {
       const gl = r.getContext(), dbg = gl.getExtension('WEBGL_debug_renderer_info');
       this.gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '';
@@ -159,7 +159,7 @@ const Engine = {
     scene.fog = new THREE.FogExp2(new THREE.Color(0.86, 0.8, 0.7), 0.0032);
     this.bakeEnv();
   },
-  // 环境贴图（天空 + 沙地反弹），亮度可调
+  // Environment map (sky + sand bounce), brightness adjustable
   bakeEnv() {
     const L = this.light, scene = this.scene;
     const u = this.sky.material.uniforms;
@@ -225,7 +225,7 @@ const Engine = {
     this.vm.setFov(Settings.data.vmFov, w / h);
   },
   warmup() {
-    // 预构建模型 & 编译着色器，避免首帧卡顿
+    // Pre-build models & compile shaders to avoid a first-frame hitch
     for (const id of ['ak47', 'm4a4', 'awp', 'deagle', 'usp', 'glock', 'mp9', 'knife', 'butterfly', 'he', 'flash', 'smoke', 'c4']) { this.vm.model(id); Models.thirdPerson(id); }
     const tmp = [new Models.Humanoid('CT'), new Models.Humanoid('T')];
     tmp.forEach((h, i) => { h.setWeapon(i ? 'ak47' : 'm4a4'); h.root.position.set(0, -50, 0); this.scene.add(h.root); });
@@ -235,8 +235,8 @@ const Engine = {
     tmp.forEach((h) => this.scene.remove(h.root));
   },
 
-  // ---------------- 对局 ----------------
-  // net：联机时由大厅传入 { opts, ctx }，ctx 为 NetHost / NetClient
+  // ---------------- Match ----------------
+  // net: passed in by the lobby in multiplayer: { opts, ctx }, ctx is NetHost / NetClient
   startGame(net) {
     Sound.init(); Sound.resume(); Sound.startAmbience();
     if (this.game) { const old = this.game; this.game = null; old.dispose(); }
@@ -254,7 +254,7 @@ const Engine = {
     this.acc = 0;
     if (!this.forceRun) Input.lock();
   },
-  // silent：网络那头已经结束了对局（房主散场 / 掉线），不用再通知
+  // silent: the network side already ended the match (host disbanded / disconnected), no need to notify again
   quitToMenu(silent) {
     const wasNet = !!(this.game && this.game.net);
     if (this.game) { const g = this.game; this.game = null; g.dispose(); }
@@ -291,7 +291,7 @@ const Engine = {
     fu.time.value = now / 1000;
     if (g) {
       const live = !this.paused && (Input.locked || this.forceRun);
-      // 联机时暂停只是不接收本机输入，对局本身（以及给别人的同步）不能停
+      // In multiplayer, pausing only stops local input; the match itself (and sync to others) must keep running
       if (live || g.net) {
         const [mx, my] = Input.takeMouse();
         if (live) g.applyLook(mx, my);
@@ -312,7 +312,7 @@ const Engine = {
       fu.vignette.value = fx ? (P.alive && P.scoped ? 0.1 : 0.32) : 0.12;
       fu.grain.value = fx ? 0.022 : 0; fu.chroma.value = fx ? 0.006 : 0;
     } else {
-      // 菜单：环绕飞行镜头
+      // Menu: orbiting camera
       this.menuT += dt;
       const t = this.menuT * 0.035, cam = this.camera;
       cam.position.set(Math.cos(t) * 34, 15 + Math.sin(t * 2.3) * 2.5, Math.sin(t) * 34 - 4);
@@ -323,14 +323,14 @@ const Engine = {
     }
     this.composer.render(dt);
   },
-  // 固定步长推进对局
+  // Advance the match with a fixed step
   advance(dt, live) {
     const g = this.game;
     this.acc += dt; let n = 0;
     while (this.acc >= TICK && n < 16) { if (live) g.buildPlayerCmd(); else g.idleCmd(); g.tick(TICK); Input.endTick(); this.acc -= TICK; n++; }
     if (n >= 16) this.acc = 0;
   },
-  // 联机时窗口切到后台/最小化：浏览器会停掉 requestAnimationFrame，改由 Worker 定时器继续推进
+  // Multiplayer, window in background/minimized: the browser stops requestAnimationFrame, so a Worker timer keeps advancing
   startBgPump() {
     try {
       const src = 'setInterval(() => postMessage(0), 16);';
@@ -344,10 +344,10 @@ const Engine = {
         this.advance(dt, false);
         if (g.client) g.net.update(dt); else g.syncModels();
       };
-    } catch (e) { /* 不支持 Worker：后台时对局会暂停 */ }
+    } catch (e) { /* Worker unsupported: match pauses in background */ }
   },
 
-  // ---------------- 菜单 / 设置 UI ----------------
+  // ---------------- Menus / settings UI ----------------
   bindUI() {
     const self = this;
     const seg = (id, key, conv) => {
@@ -377,7 +377,7 @@ const Engine = {
     Input.onUnlock = () => {
       if (!self.game || self.game.over) return;
       self.pause();
-      // 刚按过 Ctrl 就丢失指针锁定 → 多半是浏览器快捷键(Ctrl+W/D 等)抢走了焦点
+      // Just pressed Ctrl but pointer lock was lost → likely a browser shortcut (Ctrl+W/D etc.) stole focus
       if (performance.now() - Input.lastCtrlT < 400 && !document.fullscreenElement) {
         $('pauseHint').textContent = Settings.data.kbLock
           ? 'A browser shortcut interrupted the game (Ctrl combo). Click "Resume" to go fullscreen with keyboard lock so it cannot happen again'

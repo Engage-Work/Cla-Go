@@ -1,28 +1,28 @@
 'use strict';
 // ======================================================================
-//  net.js —— 局域网联机
-//    房主的浏览器跑权威对局（机器人、伤害、经济、C4、比分全在这里算），
-//    加入者本机预测自己的移动（地图碰撞两边一致），开火/购买/拾取等操作发给房主判定；
-//    其他角色按房主快照插值显示，射击命中由房主按加入者看到的画面做延迟补偿。
-//    传输：server/server.js 提供的 WebSocket 中转（一个服务器一个房间）
+//  net.js -- LAN multiplayer
+//    The host's browser runs the authoritative match (bots, damage, economy, C4, score are all computed here);
+//    guests predict their own movement locally (map collision is identical on both sides) and send fire/buy/pickup actions to the host for adjudication;
+//    other characters are shown interpolated from host snapshots, and hits are resolved by the host with lag compensation against what the guest saw.
+//    Transport: WebSocket relay provided by server/server.js (one room per server)
 // ======================================================================
-const NET_SNAP_EVERY = 2;        // 每 2 个 tick（64Hz）发一次快照
-const NET_INTERP = 0.05;         // 加入者看其他角色的插值延迟（秒）
-const NET_REWIND_MAX = 0.25;     // 延迟补偿最多回溯 250ms
+const NET_SNAP_EVERY = 2;        // Send a snapshot every 2 ticks (64Hz)
+const NET_INTERP = 0.05;         // Guest's interpolation delay when viewing other characters (seconds)
+const NET_REWIND_MAX = 0.25;     // Lag compensation rewinds at most 250ms
 const NET_SLOTS = ['primary', 'secondary', 'knife', 'nade', 'c4'];
-// 自己身上的这些声音由本机模拟产生，房主转发回来的同名声音要跳过
+// These sounds on own character are simulated locally; same-named sounds forwarded back by the host must be skipped
 const NET_SELF_LOCAL = /^(step_|jump$|land$|slidemove$|magout$|magin$)/;
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const r2 = (x) => Math.round(x * 100) / 100;
 const nv = (v) => [r3(v.x), r3(v.y), r3(v.z)];
 const vn = (a, out = new THREE.Vector3()) => out.set(a[0], a[1], a[2]);
-// Effects 调用参数的序列化：Vector3 → {V:[x,y,z]}
+// Serialization of Effects call args: Vector3 → {V:[x,y,z]}
 const fxEnc = (x) => (x && x.isVector3 ? { V: nv(x) } : x);
 const fxDec = (x) => (x && x.V ? vn(x.V) : x);
 
 // ======================================================================
-//  连接（房主发出 `目标|json`，收到的都是 `来源|json`，来源 0 = 服务器）
+//  Connection (host sends `target|json`, everything received is `source|json`, source 0 = server)
 // ======================================================================
 class NetConn {
   constructor(url) { this.url = url; this.ws = null; this.id = 0; this.role = null; this.onmsg = null; this.onclose = null; }
@@ -51,14 +51,14 @@ class NetConn {
     });
   }
   get ok() { return this.ws && this.ws.readyState === 1; }
-  send(obj) { if (this.ok) this.ws.send(JSON.stringify(obj)); }                 // 加入者 → 房主
-  sendTo(to, obj) { if (this.ok) this.ws.send(to + '|' + JSON.stringify(obj)); }  // 房主 → 某人 / '*'
-  sendRaw(to, json) { if (this.ok) this.ws.send(to + '|' + json); }               // 已经序列化好的 json
+  send(obj) { if (this.ok) this.ws.send(JSON.stringify(obj)); }                 // guest → host
+  sendTo(to, obj) { if (this.ok) this.ws.send(to + '|' + JSON.stringify(obj)); }  // host → one peer / '*'
+  sendRaw(to, json) { if (this.ok) this.ws.send(to + '|' + json); }               // already-serialized json
   close() { this.onclose = null; if (this.ws) try { this.ws.close(); } catch (e) { /* ignore */ } this.ws = null; }
 }
 
 // ======================================================================
-//  房主端：把远端玩家接进对局，向所有人广播快照和事件
+//  Host side: attach remote players to the match, broadcast snapshots and events to everyone
 // ======================================================================
 class NetHost {
   constructor(conn) {
@@ -73,13 +73,13 @@ class NetHost {
   emit(ev) { if (!this.g) return; ev.ht = r3(this.g.time); this.evq.push(ev); }
   tell(a, msg) { if (a && a.remote) this.conn.sendTo(a.pid, msg); }
 
-  // ---------------- 收到加入者的消息 ----------------
+  // ---------------- Messages received from guests ----------------
   onMessage(pid, m) {
     const g = this.g, a = this.byPid(pid);
     if (!g || !a) return;
     if (m.t === 'in') {
       a.inq.push(m);
-      if (a.inq.length > 3) {   // 两边时钟漂移/网络抖动导致积压：丢最旧的，按键沿并入下一包（积压越多操作越“肉”）
+      if (a.inq.length > 3) {   // Clock drift / network jitter caused a backlog: drop the oldest, merge key edges into the next packet (the bigger the backlog, the "heavier" the controls feel)
         const old = a.inq.shift(), nx = a.inq[0];
         nx.e |= old.e; if (!nx.sr && old.sr) nx.sr = old.sr;
       }
@@ -89,14 +89,14 @@ class NetHost {
     else if (m.t === 'pi') this.conn.sendTo(pid, { t: 'po', c: m.c });
   }
 
-  // ---------------- 每 tick：先把远端输入写进角色 ----------------
+  // ---------------- Each tick: write remote input into characters first ----------------
   preTick() {
     for (const a of this.remotes()) {
       const c = a.cmd;
       c.attackPressed = c.attack2Pressed = c.usePressed = c.reload = c.jumpPressed = c.duckPressed = false;
       const m = a.inq.shift();
       if (!m) continue;
-      if (m.ss !== a.spawnSeq) continue;   // 出生/传送之前发出的包：位置已经作废
+      if (m.ss !== a.spawnSeq) continue;   // Packet sent before spawn/teleport: its position is stale
       const b = m.b, e = m.e;
       c.fwd = m.c[0]; c.side = m.c[1];
       c.attack = !!(b & 1); c.attack2 = !!(b & 2); c.use = !!(b & 4); c.walk = !!(b & 8); c.duck = !!(b & 16); c.jump = !!(b & 32); c.sprint = !!(b & 64);
@@ -112,7 +112,7 @@ class NetHost {
     }
   }
 
-  // ---------------- 每 tick：记录位置历史，按频率发快照 ----------------
+  // ---------------- Each tick: record position history, send snapshots at the set rate ----------------
   postTick() {
     const g = this.g;
     for (const a of g.actors) {
@@ -158,7 +158,7 @@ class NetHost {
   }
   sendRoster() { this.rosterDirty = false; if (this.g) this.conn.sendTo('*', { t: 'ro', list: this.roster() }); }
 
-  // ---------------- 延迟补偿：把其他角色临时挪回射手当时看到的位置 ----------------
+  // ---------------- Lag compensation: temporarily move other characters back to where the shooter saw them ----------------
   rewind(shooter, fn) {
     const g = this.g, t = clamp(shooter.viewT == null ? g.time : shooter.viewT, g.time - NET_REWIND_MAX, g.time);
     if (g.time - t < 0.004) return fn();
@@ -187,7 +187,7 @@ class NetHost {
 }
 
 // ======================================================================
-//  加入端：自己的角色本机模拟，其他一切照房主的快照显示
+//  Guest side: own character simulated locally, everything else shown from host snapshots
 // ======================================================================
 class NetClient {
   constructor(conn) {
@@ -205,13 +205,13 @@ class NetClient {
     if (!this.g) return;
     if (m.t === 's') {
       const o = m.ht - this.now();
-      // 时钟偏移：只在“包来得更早”时立刻跟上，晚到的包慢慢跟（抗 WiFi 抖动）
+      // Clock offset: snap forward immediately only when a packet arrives earlier; late packets are followed slowly (resists WiFi jitter)
       if (this.off == null || o > this.off || Math.abs(o - this.off) > 0.5) this.off = o; else this.off += (o - this.off) * 0.02;
       this.latest = m; this.snaps.push(m);
       while (this.snaps.length > 40) this.snaps.shift();
       const myId = this.myId;
       for (const ev of m.ev) {
-        // 和自己有关的事件立刻处理（开枪反馈、受伤、阵亡），其余跟随插值延迟，与模型动作对齐
+        // Events involving self are handled immediately (fire feedback, damage, death); the rest follow the interpolation delay to line up with model animation
         if (ev.a === myId || ev.v === myId || ev.k === myId || ev.s === myId || ev.t === 'clr') this.event(ev); else this.evq.push(ev);
       }
       this.applySelf(m);
@@ -222,7 +222,7 @@ class NetClient {
     else if (m.t === 'po') this.rtt = Math.round(performance.now() - m.c);
   }
 
-  // ---------------- 名单：建 / 删镜像角色 ----------------
+  // ---------------- Roster: create / remove mirror characters ----------------
   roster(list) {
     const g = this.g, seen = new Set();
     for (const r of list) {
@@ -231,7 +231,7 @@ class NetClient {
       if (r.pid === this.conn.id) {
         a = g.player;
         if (this.me !== a || a.id !== r.n) {
-          // 本地 id 可能和房主那边别人的 id 撞号，只删自己名下的映射
+          // A local id may collide with another player's id on the host; only remove mappings under our own name
           if (this.byId.get(a.id) === a) this.byId.delete(a.id);
           a.id = r.n; this.me = a; this.byId.set(r.n, a);
         }
@@ -245,7 +245,7 @@ class NetClient {
     for (const [id, a] of this.byId) if (!seen.has(id) && a !== g.player) { g.removeActor(a); this.byId.delete(id); }
   }
 
-  // ---------------- 自己：状态以最新快照为准，位置本机预测 ----------------
+  // ---------------- Self: state from latest snapshot, position predicted locally ----------------
   applySelf(m) {
     const g = this.g, P = g.player, M = m.m;
     g.frozen = !!M.fr; g.over = !!M.ov; g.infiniteAmmo = !!M.ia;
@@ -258,9 +258,9 @@ class NetClient {
     if (row[1] !== (P.team === 'CT' ? 0 : 1)) { P.team = row[1] ? 'T' : 'CT'; g.resetModel(P, true); g.vm.setTeam(P.team); }
     this.applyStats(P, row);
     if (P.money > moneyBefore && !md.infiniteMoney) HUD.moneyFlash();
-    if (row[24] !== P.spawnSeq) {     // 出生 / 回合开始：传送到房主给的位置
+    if (row[24] !== P.spawnSeq) {     // Spawn / round start: teleport to the position given by the host
       if (row[2]) {
-        P.spawnAt(new THREE.Vector3(row[3], row[4], row[5]), row[9]);   // spawnAt 会自增序号，所以序号放在后面写
+        P.spawnAt(new THREE.Vector3(row[3], row[4], row[5]), row[9]);   // spawnAt increments the sequence number, so write it afterwards
         P.spawnTime = g.time;
         HUD.hideDeath(); g.flashAmt = 0; g.deathT = 0;
       }
@@ -278,7 +278,7 @@ class NetClient {
       if (ev.t === 's2') { Sound.play(ev.n, { vol: ev.v, rate: ev.r || 1 }); continue; }
       P.events.push(ev);
     }
-    // 爆破模式每回合冻结期自动打开购买菜单
+    // Bomb mode auto-opens the buy menu during each round's freeze time
     if (M.ph === 'freeze' && this.lastPh !== 'freeze' && P.alive && md.cb) HUD.openBuy(g);
     this.lastPh = M.ph;
   }
@@ -309,13 +309,13 @@ class NetClient {
     a.slot = slot;
   }
 
-  // ---------------- 每帧：处理延迟事件，插值其他角色 ----------------
+  // ---------------- Each frame: process delayed events, interpolate other characters ----------------
   update(dt) {
     const g = this.g; if (!g || !this.latest) return;
     const P = g.player, t = this.renderT();
     while (this.evq.length && this.evq[0].ht <= t) this.event(this.evq.shift());
     if (this.evq.length > 400) this.evq.splice(0, this.evq.length - 400);
-    // 找包住渲染时刻的两帧快照
+    // Find the two snapshots bracketing the render time
     const S = this.snaps;
     let s0 = S[0], s1 = S[S.length - 1];
     for (let i = S.length - 1; i > 0; i--) if (S[i - 1].ht <= t) { s0 = S[i - 1]; s1 = S[i]; break; }
@@ -325,12 +325,12 @@ class NetClient {
       const a = this.byId.get(r1[0]);
       if (!a || a === P) continue;
       let r0 = rows0.get(r1[0]);
-      if (!r0 || r0[24] !== r1[24]) r0 = r1;      // 中间重生过：不跨越插值
+      if (!r0 || r0[24] !== r1[24]) r0 = r1;      // Respawned in between: don't interpolate across
       this.applyMirror(a, r0, r1, k);
     }
-    // 最新快照里的数值（计分板 / 观战 HUD 用）
+    // Values from the latest snapshot (used by scoreboard / spectator HUD)
     for (const r of this.latest.A) { const a = this.byId.get(r[0]); if (a && a !== P) { this.applyStats(a, r); this.syncInv(a, r); } }
-    // 镜头后坐：快照 64Hz，平滑到本地帧率
+    // Camera recoil: snapshots are 64Hz, smooth to local frame rate
     const R = this.recoil;
     if (R) {
       const f = 1 - Math.exp(-dt * 50);
@@ -360,7 +360,7 @@ class NetClient {
     a.duckAmt = lerp(r0[12], r1[12], k); a.slideAmt = lerp(r0[13], r1[13], k);
   }
 
-  // ---------------- 房主事件 → 本机表现 ----------------
+  // ---------------- Host events → local presentation ----------------
   event(ev) {
     const g = this.g, P = g.player, A = (id) => this.byId.get(id);
     switch (ev.t) {
@@ -427,7 +427,7 @@ class NetClient {
     }
   }
 
-  // ---------------- 每 tick：把本机输入和预测位置发给房主 ----------------
+  // ---------------- Each tick: send local input and predicted position to the host ----------------
   sendInput() {
     const g = this.g, P = g.player, c = P.cmd;
     const b = (c.attack ? 1 : 0) | (c.attack2 ? 2 : 0) | (c.use ? 4 : 0) | (c.walk ? 8 : 0) | (c.duck ? 16 : 0) | (c.jump ? 32 : 0) | (c.sprint ? 64 : 0);
@@ -445,7 +445,7 @@ class NetClient {
 }
 
 // ======================================================================
-//  加入端的模式：比分 / 阶段 / 炸弹都照房主的快照
+//  Guest-side modes: score / phase / bomb all follow host snapshots
 // ======================================================================
 class ModeMirror {
   constructor(g, id) {
@@ -472,7 +472,7 @@ class ModeMirror {
 }
 
 // ======================================================================
-//  大厅（主菜单里的「联机对战」面板）
+//  Lobby (the "Multiplayer" panel in the main menu)
 // ======================================================================
 const NAME_KEY = 'sandstorm_fps_netname';
 const Lobby = {
@@ -485,7 +485,7 @@ const Lobby = {
     $('lbName').value = nm || 'Player' + Math.floor(Math.random() * 900 + 100);
     const httpPage = location.protocol === 'http:' || location.protocol === 'https:';
     $('lbServer').value = httpPage && !/github\.io$/.test(location.hostname) ? location.host : 'localhost:8080';
-    // 从联机服务器打开时，问它要局域网地址，好告诉舍友该开哪个网址
+    // When opened from the multiplayer server, ask it for the LAN address so roommates know which URL to open
     this.lan = null;
     if (location.protocol === 'http:') fetch('/api/lan').then((r) => r.json()).then((d) => { this.lan = d.ips.map((ip) => `http://${ip}:${d.port}`); this.render(); }).catch(() => {});
     if (location.protocol === 'https:') $('lbTip').innerHTML = 'This is the online demo page (HTTPS), and browsers do not let it connect to a LAN server.<br>For multiplayer, first run <b>start-lan-server.cmd</b> (or <b>node server/server.js</b>) on one computer, then have everyone open the address it shows.';
@@ -560,7 +560,7 @@ const Lobby = {
     return this.guestMsg(from, m);
   },
 
-  // ---------------- 房主 ----------------
+  // ---------------- Host ----------------
   hostMsg(from, m) {
     if (from === 0) {
       if (m.t === 'join') {
@@ -602,14 +602,14 @@ const Lobby = {
     this.conn.sendTo(p.pid, { t: 'start', opts: this.opts, team: p.team });
     this.ctx.rosterDirty = true;
   },
-  // 对局结束 / 房主退出：通知所有人回大厅
+  // Match ended / host quit: notify everyone to return to the lobby
   gameEnded() {
     if (this.role === 'host' && this.inGame) { this.inGame = false; this.ctx = null; this.conn && this.conn.sendTo('*', { t: 'end' }); this.broadcast(); this.open(); }
     else if (this.role === 'guest' && this.inGame) { this.inGame = false; this.ctx = null; this.conn && this.conn.send({ t: 'bye' }); this.open(); }
     this.render();
   },
 
-  // ---------------- 加入者 ----------------
+  // ---------------- Guest ----------------
   guestMsg(from, m) {
     if (from === 0) {
       if (m.t === 'hostleft') {
@@ -634,7 +634,7 @@ const Lobby = {
     if (this.ctx) this.ctx.onMessage(from, m);
   },
 
-  // ---------------- 界面 ----------------
+  // ---------------- UI ----------------
   render() {
     const on = !!this.conn, host = this.role === 'host';
     $('lbConnect').classList.toggle('hidden', on);

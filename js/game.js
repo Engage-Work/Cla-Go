@@ -1,13 +1,13 @@
 'use strict';
 // ======================================================================
-//  game.js —— 对局：子弹（穿透/命中盒/距离衰减/护甲）、伤害与击杀、
-//              投掷物、掉落物、观战、模式（爆破/死斗/靶场）、经济
+//  game.js -- match: bullets (penetration/hitboxes/distance falloff/armor), damage and kills,
+//              throwables, pickups, spectating, modes (bomb defusal/deathmatch/shooting range), economy
 // ======================================================================
 const GROUP_MULT = { head: 4, chest: 1, stomach: 1.25, arm: 1, leg: 0.75 };
 const _ginv = new THREE.Matrix4(), _glo = new THREE.Vector3(), _gld = new THREE.Vector3();
 const _g1 = new THREE.Vector3(), _g2 = new THREE.Vector3(), _g3 = new THREE.Vector3(), _g4 = new THREE.Vector3();
 const _gq = new THREE.Quaternion();
-// 射线-椭球求交（骨骼局部空间；头部用椭球，贴合模型，不再是偏大的方盒）
+// Ray-ellipsoid intersection (bone-local space; the head uses an ellipsoid that fits the model instead of an oversized box)
 function rayEllipsoid(e, o, d) {
   const ox = (o.x - e.c.x) / e.r.x, oy = (o.y - e.c.y) / e.r.y, oz = (o.z - e.c.z) / e.r.z;
   const dx = d.x / e.r.x, dy = d.y / e.r.y, dz = d.z / e.r.z;
@@ -31,7 +31,7 @@ class Game {
     this.fps = 60; this.spectating = false; this.viewTarget = null; this.deathT = 0; this.over = false; this.overT = 0;
     this.spotT = 0; this.crouchToggle = false; this.killer = null;
     this._rh = {};
-    // 联机：net = NetHost（房主，权威对局）或 NetClient（加入者，照快照显示）
+    // Multiplayer: net = NetHost (host, authoritative match) or NetClient (guest, displays from snapshots)
     this.net = opts.net || null; this.client = !!(this.net && this.net.client);
     const M = this.client ? ModeMirror : { tdm: ModeTDM, comp: ModeComp, range: ModeRange }[opts.mode];
     this.mode = new M(this, opts.mode);
@@ -43,7 +43,7 @@ class Game {
     this.camera.layers.set(0);
   }
 
-  // ---------------- 角色 ----------------
+  // ---------------- Characters ----------------
   createActor(team, isBot, name, remote) {
     const a = new Actor(this, { name, team, isBot, isPlayer: !isBot && !remote, remote: !!remote, pid: remote && remote.pid, knife: remote && remote.knife });
     a.model = new Models.Humanoid(team);
@@ -55,11 +55,11 @@ class Game {
     return a;
   }
   humans(team) { return this.actors.filter((a) => a.team === team && !a.isBot).length; }
-  // 房主：对局中途有人加入 / 离开
+  // Host: a player joins / leaves mid-match
   addRemote(h) {
     const a = this.createActor(h.team, false, h.name, h), md = this.mode;
     if (md.id === 'tdm') { md.loadout(a); md.spawn(a); }
-    else { a.money = 800; a.stripForNewGame(); a.alive = false; }   // 爆破：下一回合出生
+    else { a.money = 800; a.stripForNewGame(); a.alive = false; }   // Bomb mode: spawns next round
     return a;
   }
   removeRemote(pid) { const a = this.actors.find((x) => x.remote && x.pid === pid); if (a) this.removeActor(a); }
@@ -72,7 +72,7 @@ class Game {
     if (this.viewTarget === a) this.viewTarget = null;
     if (this.net && this.net.host) this.net.rosterDirty = true;
   }
-  // 加入者：按房主名单建出的镜像角色（不跑 AI、不跑物理）
+  // Guest: mirror characters built from the host's roster (no AI, no physics)
   createMirror(r) {
     const a = new Actor(this, { name: r.name, team: r.team, isBot: !!r.bot, isPlayer: false });
     a.mirror = true;
@@ -83,16 +83,16 @@ class Game {
     return a;
   }
 
-  // ---------------- 联机广播（只有房主发） ----------------
+  // ---------------- Network broadcast (host only) ----------------
   emit(ev) { if (this.net && this.net.host) this.net.emit(ev); }
   emitSnd(name, pos, o) {
     if (!(this.net && this.net.host)) return;
     const oo = Object.assign({}, o); delete oo.src; delete oo.net;
     this.net.emit({ t: 'snd', n: name, p: nv(pos), o: oo, s: o.src });
   }
-  // 本机播放并同步给所有人的特效
+  // Effects played locally and synced to everyone
   fx(name, ...args) { Effects[name](...args); this.emit({ t: 'fx', f: name, a: args.map(fxEnc) }); }
-  // 按每个玩家的视角各说各的：spec 为参数数组，或 (角色) => 参数数组 / null
+  // Each player gets their own view: spec is an args array, or (actor) => args array / null
   center(spec) {
     const f = typeof spec === 'function' ? spec : () => spec;
     const mine = f(this.player); if (mine) HUD.center(...mine);
@@ -109,7 +109,7 @@ class Game {
   resetModel(a, force) {
     const h = a.model;
     if (force || h.ragdoll || h.hips.parent !== h.root) {
-      // 尸体（布娃娃）留在场景里，由数量上限回收；角色换新模型
+      // Corpse (ragdoll) stays in the scene and is recycled by a count cap; the character gets a fresh model
       if (h.ragdoll) { if (force) { h.ragdoll.dispose(); this.ragdolls = this.ragdolls.filter((r) => r !== h.ragdoll); } }
       else this.scene.remove(h.root);
       const nh = new Models.Humanoid(a.team);
@@ -157,9 +157,9 @@ class Game {
     return pick(pts).clone();
   }
 
-  // ---------------- 声音 ----------------
+  // ---------------- Sound ----------------
   playAt(name, pos, o = {}) {
-    // 房主默认把定位音同步给所有人；加入者自己会模拟出来的（枪声/弹着/手雷）标 net:false
+    // Host syncs positional sounds to everyone by default; sounds guests simulate themselves (gunshot/impact/grenade) are tagged net:false
     if (o.net !== false) this.emitSnd(name, pos, o);
     const cam = this.camera.position;
     const d = cam.distanceTo(pos);
@@ -170,7 +170,7 @@ class Game {
     Sound.play(name, { pos, vol, ref: o.ref || 3, roll: o.roll || 1, lp: Math.max(lp, 650), delay: (o.delay || 0) + d / 343, dist: d, rev: o.rev });
   }
 
-  // ---------------- 射击 ----------------
+  // ---------------- Shooting ----------------
   rayActors(ox, oy, oz, d, maxT, exclude) {
     let best = null, bt = maxT;
     for (const a of this.actors) {
@@ -229,7 +229,7 @@ class Game {
         this.playAt(mat.snd, hp, { vol: 0.5, ref: 1.5, maxDist: 30, rev: 0, net: false });
         if (mat.fx !== 'sand' && Math.random() < 0.12) this.playAt('ricochet', hp, { vol: 0.35, ref: 2, maxDist: 30, net: false });
       }
-      // 穿透
+      // Penetration
       const maxThick = (def.pen || 0) * mat.pen;
       if (pens >= 3 || maxThick < 0.01) break;
       let thick = this.world.exitT(whBox, ox, oy, oz, d.x, d.y, d.z) - whT;
@@ -249,14 +249,14 @@ class Game {
       ox = px + d.x * 0.01; oy = py + d.y * 0.01; oz = pz + d.z * 0.01;
     }
     if (!tracerEnd) tracerEnd = new THREE.Vector3(o.x + d.x * 100, o.y + d.y * 100, o.z + d.z * 100);
-    // 曳光
+    // Tracer
     if (def.tracer) {
       let start;
       if (sh.isPlayer) start = this.vm.muzzleWorld(_g4).add(this.camera.position).clone();
       else start = sh.model.weapon ? sh.model.weapon.muzzle.getWorldPosition(new THREE.Vector3()) : o.clone();
       if (start.distanceTo(tracerEnd) > 3) Effects.tracer(start, tracerEnd);
     }
-    // 近失呼啸
+    // Near-miss whiz
     const P = this.player;
     if (sh !== P && P.alive && !hitSomeone) {
       const eye = P.eyePos(_g4);
@@ -324,9 +324,9 @@ class Game {
     }
   }
 
-  // ---------------- 伤害 / 击杀 ----------------
+  // ---------------- Damage / kills ----------------
   applyDamage(v, att, dmg, group, def, dir, point, wall, melee) {
-    // 加入者不结算伤害：只把自己的坠落伤害报给房主
+    // Guests don't resolve damage: they only report their own fall damage to the host
     if (this.client) { if (v === this.player && group === 'fall' && v.alive) this.net.send({ t: 'fall', d: dmg }); return; }
     if (!v.alive || this.over) return;
     const ff = this.opts.ff;
@@ -380,9 +380,9 @@ class Game {
     for (const [o, dd] of v.damageBy) if (o !== att && dd >= 41 && o.team !== v.team) o.assists++;
     HUD.killfeed({ killer: att && att !== v ? att : null, victim: v, weapon: def ? def.name : 'Fall', hs, wallbang: wall, mine: (att && att.isPlayer) || v.isPlayer });
     if (att && att.isPlayer && att !== v) Sound.play('kill', { vol: 0.35 });
-    // 先广播：加入者要在武器掉落之前用同一个姿态生成布娃娃
+    // Broadcast first: guests must spawn the ragdoll with the same pose before the weapon drops
     if (this.net) this.emit({ t: 'kill', v: v.id, k: att ? att.id : 0, w: def ? def.name : 'Fall', hs: hs ? 1 : 0, wb: wall ? 1 : 0, dir: dir ? nv(dir) : null, g: group });
-    // 掉落
+    // Drop
     if (v.inv.primary) v.lastPrimary = v.inv.primary.id;
     const drop = v.inv.primary || v.inv.secondary;
     if (drop && md.id !== 'range') { this.dropWeapon(v, drop); if (drop === v.inv.primary) v.inv.primary = null; else v.inv.secondary = null; }
@@ -392,7 +392,7 @@ class Game {
     if (v.isPlayer) this.playerDied(att && att !== v ? att : null, def ? def.name : '', hs, wall);
     md.onKill(v, att, hs);
   }
-  // 布娃娃（房主和加入者共用）
+  // Ragdoll (shared by host and guest)
   makeRagdoll(v, dir, group, hs) {
     const h = v.model;
     if (!h || h.ragdoll) return;
@@ -404,18 +404,18 @@ class Game {
     if (this.ragdolls.length > 14) { const r = this.ragdolls.shift(); r.dispose(); }
     if (hs || Math.random() < 0.4) this.later(1.2, () => { if (!v.alive && h.ragdoll) Effects.bloodPool(h.ragdoll.p[1]); });
   }
-  // 本机玩家阵亡：死亡视角 + 提示
+  // Local player death: death cam + prompt
   playerDied(killer, wname, hs, wall) {
     const v = this.player;
     this.deathT = 0; this.killer = killer;
-    // 死亡视角：从自己眼睛位置拉到尸体后上方，鼠标可自由环绕（不再自动锁定击杀者）
+    // Death cam: pull from own eye position to behind/above the corpse, mouse orbits freely (no longer auto-locks onto the killer)
     this.deathYaw = v.yaw; this.deathPitch = -0.42; this.deathEye = v.eyePos(new THREE.Vector3()); this.deathQuat = this.camera.quaternion.clone();
     const kd = killer ? `Killed by <span class="c${killer.team}">${killer.name}</span> with ${wname}${hs ? ' (headshot)' : ''}${wall ? ' (through wall)' : ''}` : 'You died';
     HUD.showDeath(kd, killer ? `Killer has ${Math.max(0, killer.hp)} HP left` : '');
     Sound.stopAll();
   }
 
-  // ---------------- 掉落物 ----------------
+  // ---------------- Pickups ----------------
   dropWeapon(a, inst, isC4) {
     const mdl = Models.thirdPerson(isC4 ? 'c4' : inst.id);
     this.scene.add(mdl.group);
@@ -453,7 +453,7 @@ class Game {
       d.mesh.rotation.set(0, d.ry, d.rest ? Math.PI / 2 : d.t * 6, 'YXZ');
       if (d.c4) d.mesh.rotation.set(0, d.ry, 0);
     }
-    // 拾取（只在房主 / 单机结算）
+    // Pickup (resolved only on host / singleplayer)
     if (this.client) return;
     for (const a of this.actors) {
       if (!a.alive || a.mirror) continue;
@@ -487,7 +487,7 @@ class Game {
   }
   removeDrop(i) { this.emit({ t: 'undrop', n: this.drops[i].nid }); this.scene.remove(this.drops[i].mesh); this.drops.splice(i, 1); }
 
-  // ---------------- 投掷物 ----------------
+  // ---------------- Throwables ----------------
   spawnGrenade(id, pos, vel, owner) {
     this.emit({ t: 'nade', id, p: nv(pos), v: nv(vel), a: owner.id });
     const mdl = Models.thirdPerson(id);
@@ -573,7 +573,7 @@ class Game {
     }
   }
 
-  // ---------------- 购买 ----------------
+  // ---------------- Purchase ----------------
   buyState(a, id) {
     const it = WEAPONS[id] || EQUIP[id], md = this.mode;
     const price = md.infiniteMoney ? 0 : it.price;
@@ -604,7 +604,7 @@ class Game {
         if (cur && md.id !== 'range') this.dropWeapon(a, cur);
       }
       a.giveWeapon(id);
-      if (def.type === 'grenade' && a.isPlayer && a.slot !== 'nade') { /* 不自动切出 */ }
+      if (def.type === 'grenade' && a.isPlayer && a.slot !== 'nade') { /* don't auto-switch */ }
     } else if (id === 'kevlar') a.armor = 100;
     else if (id === 'helmet') { a.armor = 100; a.helmet = true; }
     else if (id === 'defuser') a.inv.defuser = true;
@@ -626,7 +626,7 @@ class Game {
     for (const n of nades) if (m() >= 900 && Math.random() < 0.5) this.buy(a, n);
   }
 
-  // ---------------- 主循环 ----------------
+  // ---------------- Main loop ----------------
   buildPlayerCmd() {
     const P = this.player, c = P.cmd, I = Input, S = Settings.data;
     const ui = HUD.buyOpen;
@@ -696,9 +696,9 @@ class Game {
     for (const a of this.actors) {
       if (a.remote) a.netSim(dt); else a.simulate(dt);
       a.updateWeapon(dt);
-      if (!a.isPlayer && !a.remote) a.events.length = 0;   // 机器人没有第一人称动画，事件直接丢掉
+      if (!a.isPlayer && !a.remote) a.events.length = 0;   // bots have no first-person animation; drop events directly
     }
-    // 角色之间的软碰撞（远端玩家的位置以对方本机为准，这里不推它）
+    // Soft collision between characters (remote player position is authoritative on their own machine, don't push it here)
     const al = this.actors;
     for (let i = 0; i < al.length; i++) {
       const a = al[i]; if (!a.alive) continue;
@@ -717,7 +717,7 @@ class Game {
     if (this.net) this.net.postTick();
     if (this.over) { this.overT += dt; if (this.overT > 9) this.eng.quitToMenu(); }
   }
-  // 加入者：只模拟自己的移动；手雷 / 掉落物照房主给的初速度本地演算
+  // Guest: simulates only own movement; grenades / pickups are simulated locally from the host's initial velocity
   tickClient(dt) {
     const P = this.player;
     P.simulate(dt);
@@ -734,7 +734,7 @@ class Game {
     this.updateDrops(dt);
     this.net.sendInput();
   }
-  // 后台不渲染时也要让命中盒跟着角色走（机器人开枪按模型骨骼判定）
+  // Keep hitboxes following characters even when not rendering in background (bots shoot using model-bone hit detection)
   syncModels() {
     for (const a of this.actors) {
       if (!a.alive || !a.model || a.model.ragdoll) continue;
@@ -743,7 +743,7 @@ class Game {
   }
   idleCmd() { const c = this.player.cmd; Object.assign(c, newCmd(), { duck: this.crouchToggle && c.duck }); }
 
-  // ---------------- 回合清场 / C4（房主与加入者共用） ----------------
+  // ---------------- Round cleanup / C4 (shared by host and guest) ----------------
   clearRoundFx() {
     Effects.clearRound();
     for (const d of this.drops) this.scene.remove(d.mesh); this.drops.length = 0;
@@ -792,11 +792,11 @@ class Game {
         h.root.rotation.y = a.yaw;
         h.update(dt, { speed: a.hspeed(), crouch: a.ducked || a.sliding, pitch: a.pitch, reloading: a.reloading });
         h.root.updateMatrixWorld(true);
-        if (a.isPlayer) h.skeleton.update();   // 第一人称时主相机看不到自身模型，需手动刷新骨骼供阴影使用
+        if (a.isPlayer) h.skeleton.update();   // In first person the main camera can't see own model, so refresh the skeleton manually for shadows
       }
     }
     for (const r of this.ragdolls) r.update(dt);
-    // 雷达发现（联机时两队都要算，加入者直接用房主的结果）
+    // Radar spotting (both teams computed in multiplayer; guest uses the host's result directly)
     this.spotT -= dt;
     if (this.spotT <= 0 && !this.client) {
       this.spotT = 0.15;
@@ -819,12 +819,12 @@ class Game {
     const sunVis = this.sunVisibility(cam.position);
     if (view) this.vm.update(dt, P, cam.quaternion, mx, my, sunVis);
     else { this.vm.root.visible = false; P.events.length = 0; }
-    // 后处理参数
+    // Post-processing params
     if (this.flashHold > 0) this.flashHold -= dt; else this.flashAmt = Math.max(0, this.flashAmt - dt * 0.55);
     this.dmgFlash = Math.max(0, this.dmgFlash - dt * 1.6);
     this.shake = Math.max(0, this.shake - dt * 1.8);
     if (P.alive && P.hp <= 25) { this.heartT -= dt; if (this.heartT <= 0) { this.heartT = 0.85; Sound.play('heart', { vol: 0.45 }); } }
-    // 听者
+    // Listener
     const f = _g1.set(0, 0, -1).applyQuaternion(cam.quaternion), u = _g2.set(0, 1, 0).applyQuaternion(cam.quaternion);
     Sound.setListener(cam.position, f, u);
     HUD.update(dt, this);
@@ -912,7 +912,7 @@ class Game {
 }
 
 // ======================================================================
-//  模式：团队死斗
+//  Mode: team deathmatch
 // ======================================================================
 class ModeTDM {
   constructor(g) { this.g = g; this.id = 'tdm'; this.title = 'Team Deathmatch'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.limit = 50; this.total = 480; this.t = 0; this.phase = 'live'; this.spectateAllowed = false; }
@@ -987,7 +987,7 @@ class ModeTDM {
 }
 
 // ======================================================================
-//  模式：靶场
+//  Mode: shooting range
 // ======================================================================
 class ModeRange {
   constructor(g) { this.g = g; this.id = 'range'; this.title = 'Firing Range'; this.infiniteMoney = true; this.score = { CT: 0, T: 0 }; this.phase = 'live'; this.spectateAllowed = false; g.infiniteAmmo = true; }
@@ -1020,7 +1020,7 @@ class ModeRange {
 }
 
 // ======================================================================
-//  模式：爆破竞技（回合制 + 经济 + C4）
+//  Mode: bomb defusal (round-based + economy + C4)
 // ======================================================================
 class ModeComp {
   constructor(g) {
@@ -1053,7 +1053,7 @@ class ModeComp {
       a.spawnAt(pts[a.team].pop() || g.map.spawns[a.team][0], a.team === 'T' ? 0 : Math.PI);
       a.roundKills = 0;
     }
-    // 炸弹
+    // Bomb
     const ts = g.actors.filter((a) => a.team === 'T');
     if (ts.length) { const c = pick(ts); c.inv.c4 = true; this.bomb = { carrier: c, dropped: false, planted: false, pos: new THREE.Vector3(), timer: 40, defuseT: 0, beepT: 0, exploded: false, defused: false }; }
     this.phase = 'freeze'; this.t = this.freezeTime; g.frozen = true; g.noFire = true;
@@ -1080,7 +1080,7 @@ class ModeComp {
   assignTasks() {
     const g = this.g, map = g.map;
     const bots = (t) => g.actors.filter((a) => a.isBot && a.alive && a.team === t);
-    // T：选包点与路线
+    // T: pick bomb site and route
     const site = Math.random() < 0.55 ? 'A' : 'B';
     this.tSite = site;
     const ts = bots('T');
@@ -1093,7 +1093,7 @@ class ModeComp {
       const then = a.inv.c4 ? { type: 'plant', pos: this.snap(plantPos, s.center), urgent: true } : { type: 'hold', pos: h.pos.clone(), look: map.points[site === 'A' ? 'ct_to_a' : 'b_doors'].clone().add(_g1.set(0, 1.5, 0)) };
       a.brain.task = { type: 'route', pts: route, i: 0, then, delay: i * 0.6 };
     });
-    // CT：分防
+    // CT: split defense
     const cs = shuffle(bots('CT'));
     const groups = ['A', 'B', 'mid', 'A', 'B'];
     cs.forEach((a, i) => {
@@ -1137,7 +1137,7 @@ class ModeComp {
         g.playAt('beep', B.pos, { vol: 0.8, ref: 4, roll: 0.9, rev: 0.1 });
         if (this.bombLight) { this.bombLight.material.color.setRGB(8, 0.4, 0.3); setTimeout(() => this.bombLight && this.bombLight.material.color.setRGB(0.6, 0.02, 0.02), 90); }
       }
-      // 拆弹
+      // Defuse
       let defuser = null;
       for (const a of g.actors) {
         a.defusing = false;
@@ -1154,7 +1154,7 @@ class ModeComp {
       } else { B.defuser = null; B.defuseT = 0; }
       if (B.timer <= 0) { this.explodeBomb(); return; }
     }
-    // 胜负判定
+    // Win/lose check
     const alive = (t) => g.actors.some((a) => a.alive && a.team === t);
     if (!alive('T') && !(B && B.planted)) return this.endRound('CT', 'elim');
     if (!alive('CT')) return this.endRound('T', 'elim');
@@ -1168,7 +1168,7 @@ class ModeComp {
       const t = a.brain.task;
       if (t.type === 'route') {
         if (t.delay > 0) { t.delay -= dt; continue; }
-        // 进点前道具：闪光弹丢进包点，烟雾弹封 CT 回防口
+        // Pre-entry utility: flash thrown into the site, smoke blocks the CT retake choke
         const site = this.tSite, st = map.sites[site];
         if (!t.smokeDone && t.pts.length >= 3 && t.i >= t.pts.length - 3 && !a.brain.target && !a.brain.nade) {
           t.smokeDone = true;
@@ -1186,7 +1186,7 @@ class ModeComp {
         if (t.timer > rand(14, 30) && t.grp && a.team === 'CT' && !(B && B.planted)) { const h = pick(map.holds[t.grp]); t.pos = h.pos.clone(); t.look = h.look.clone(); t.timer = 0; }
       }
     }
-    // 掉落的炸弹：最近的 T 去捡
+    // Dropped bomb: nearest T picks it up
     if (B && B.dropped && !B.planted) {
       let best = null, bd = 1e9;
       for (const a of g.actors) if (a.isBot && a.alive && a.team === 'T') { const d = a.pos.distanceTo(B.pos); if (d < bd) { bd = d; best = a; } }
@@ -1219,7 +1219,7 @@ class ModeComp {
     g.playAt('armed', B.pos, { vol: 0.8, ref: 5 });
     a.money += 300; a.mvpFlag = true;
     g.center(['Bomb planted', 'win-t', 3, `Site ${site} · Detonates in 40s`]);
-    // 机器人：CT 回防拆弹，T 守包
+    // Bots: CT retake and defuse, T guard the bomb
     const cts = g.actors.filter((x) => x.isBot && x.alive && x.team === 'CT').sort((p, q) => p.pos.distanceTo(B.pos) - q.pos.distanceTo(B.pos));
     cts.forEach((x, i) => { x.brain.task = i === 0 || Math.random() < 0.5 ? { type: 'defuse', pos: B.pos.clone(), urgent: i === 0 } : { type: 'hold', pos: B.pos.clone().add(_g1.set(rand(-4, 4), 0, rand(-4, 4))), look: B.pos.clone().add(_g1.set(0, 1, 0)) }; });
     const holds = g.map.holds[site];

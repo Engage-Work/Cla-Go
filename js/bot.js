@@ -1,11 +1,11 @@
 'use strict';
 // ======================================================================
-//  bot.js —— 机器人 AI：感知(视野/通视/听觉/受击) → 状态机 →
-//             导航(A*) → 人类化瞄准(反应时间/误差收敛/压枪) → 急停点射
+//  bot.js - bot AI: perception (vision/line of sight/hearing/damage) -> state machine ->
+//             navigation (A*) -> human-like aim (reaction time/error convergence/recoil control) -> counter-strafe burst fire
 // ======================================================================
 const DIFFS = {
-  // react 反应(s)  turn 转身(°/s)  err 初始瞄准误差(°)  errDecay 误差收敛  head 瞄头概率  spray 压枪程度
-  // fov 视野  hear 听觉  strafe 对枪横移  track 跟枪  stopShoot 急停开枪纪律  slide 滑铲倾向  first 首枪额外延迟(s)
+  // react reaction time (s)  turn turn rate (deg/s)  err initial aim error (deg)  errDecay error convergence  head headshot-aim chance  spray recoil-control skill
+  // fov field of view  hear hearing  strafe strafe while fighting  track tracking  stopShoot stop-before-shooting discipline  slide slide tendency  first extra delay on first shot (s)
   easy:   { label: 'Recruit',   react: 0.78, turn: 170, err: 10,  errDecay: 0.9, head: 0.06, spray: 0.12, fov: 100, hear: 0.5,  strafe: 0.2,  track: 0.3,  stopShoot: 0.3,  slide: 0.15, first: 0.25 },
   normal: { label: 'Veteran',   react: 0.52, turn: 280, err: 6.5, errDecay: 1.6, head: 0.15, spray: 0.35, fov: 110, hear: 0.72, strafe: 0.45, track: 0.55, stopShoot: 0.65, slide: 0.4,  first: 0.12 },
   hard:   { label: 'Elite',   react: 0.34, turn: 440, err: 4.0, errDecay: 2.8, head: 0.3,  spray: 0.62, fov: 120, hear: 0.92, strafe: 0.75, track: 0.78, stopShoot: 0.88, slide: 0.7,  first: 0.05 },
@@ -34,8 +34,8 @@ class BotBrain {
     this.burstPause = 0; this.task = null; this.holdT = 0; this.lastSeenT = -99; this.nade = null;
   }
 
-  // ---------------- 投掷物 ----------------
-  // 计划把 id 投向 target（自动反解抛物线出手角）
+  // ---------------- Grenades ----------------
+  // Plan a throw of grenade id at target (solves the lob angle for the parabola)
   planNade(id, target) {
     const a = this.a;
     if (this.nade || !a.inv.nades[id]) return false;
@@ -81,7 +81,7 @@ class BotBrain {
     if (!this.targetVisible) { this.lastKnown.copy(attacker.pos); this.lastSeenT = this.g.time - 1; }
   }
 
-  // ---------------- 感知 ----------------
+  // ---------------- Perception ----------------
   think() {
     const a = this.a, g = this.g;
     const eye = a.eyePos(this._e);
@@ -97,7 +97,7 @@ class BotBrain {
         const known = e === this.target || (e === this.alertBy && g.time - this.alertT < 2.5);
         const dot = (dx * fwd.x + dy * fwd.y + dz * fwd.z) / dist;
         if (!known && dot < cosF) continue;
-        // 远处、移动慢、蹲着的目标更难发现
+        // Distant, slow-moving, crouched targets are harder to spot
         if (!known && dist > 30 && e.hspeed() < 1 && e.ducked && Math.random() < 0.4) continue;
         let vis = g.visible(eye, head);
         if (!vis) vis = g.visible(eye, g.aimPoint(e, 'chest', _v1));
@@ -132,14 +132,14 @@ class BotBrain {
   pickBurst(dist) {
     const def = this.a.def;
     if (!def.auto) return 1;
-    // 压枪差的机器人打短点射（否则后坐上飘全变成爆头）
+    // Bots with poor recoil control fire short bursts (otherwise the recoil climb turns into headshots)
     const sp = this.d.spray;
     if (dist > 30) return randi(1, 2 + Math.round(sp));
     if (dist > 14) return randi(2, 3 + Math.round(3 * sp));
     return randi(3, 4 + Math.round(12 * sp));
   }
 
-  // ---------------- 决策 ----------------
+  // ---------------- Decision ----------------
   decide() {
     const a = this.a, g = this.g;
     let goal = null;
@@ -175,7 +175,7 @@ class BotBrain {
     }
   }
 
-  // ---------------- 每 tick ----------------
+  // ---------------- Per tick ----------------
   tick(dt) {
     const a = this.a;
     if (!a.alive) return;
@@ -207,7 +207,7 @@ class BotBrain {
       }
       if (a.slot === 'c4' && !this.task) c.slotReq = a.bestSlot();
       this.navigate(dt);
-      // 空闲时换弹 / 切回主武器
+      // When idle: reload / switch back to primary weapon
       const w = a.weapon;
       if (w && w.def.mag && w.mag < w.def.mag * 0.5 && w.reserve > 0 && !a.reloading && this.g.time - this.lastSeenT > 1.5) c.reload = true;
       if (a.slot === 'knife' && (a.inv.primary || a.inv.secondary) && !(this.task && this.task.knife)) c.slotReq = a.bestSlot();
@@ -223,7 +223,7 @@ class BotBrain {
       const p = g.aimPoint(this.target, this.aimPart, this._p);
       const dx = p.x - eye.x, dy = p.y - eye.y, dz = p.z - eye.z;
       ty = yawOf(dx, dz); tp = Math.atan2(dy, Math.hypot(dx, dz));
-      // 目标横移 → 误差增大（跟枪能力不足）
+      // Target strafing -> larger error (tracking falls behind)
       const tv = this.target.vel, dist = Math.hypot(dx, dz) + 0.1;
       const lateral = Math.abs((tv.x * dz - tv.z * dx) / dist) / dist;
       const k = Math.exp(-this.d.errDecay * dt);
@@ -265,8 +265,8 @@ class BotBrain {
     const a = this.a, c = a.cmd, def = a.def;
     c.fwd = 0;
     const dist = this.target.pos.distanceTo(a.pos);
-    if (a.sliding) { c.fwd = 1; c.side = 0; return; }   // 滑铲中保持方向
-    // 刚发现敌人且正在全速奔跑：滑铲抢位（爆发式滑铲）
+    if (a.sliding) { c.fwd = 1; c.side = 0; return; }   // keep direction while sliding
+    // Just spotted an enemy while sprinting: slide to take position (burst slide)
     if (!this.slideDecided) { this.slideDecided = true; if (this.slideCheck(dist > 6 && dist < 30 ? 0.55 : 0)) { c.fwd = 1; c.side = 0; return; } }
     if (def.type === 'sniper') {
       c.side = 0;
@@ -296,7 +296,7 @@ class BotBrain {
     if (dist > 45 && def.type === 'pistol') c.fwd = 0.6;
     c.duck = this.crouchSpray && a.recoilIdx > 3 && dist > 10;
   }
-  // 满足条件则按下蹲触发滑铲（实际是否滑出由 Actor 物理判定：需接近满速且朝前）
+  // Press crouch to trigger a slide if conditions are met (whether it actually slides is decided by Actor physics: needs near full speed and moving forward)
   slideCheck(p, wx, wz, room) {
     const a = this.a, def = a.def;
     if (a.sliding || a.slideCD > 0 || !a.onGround || a.scoped || def.type === 'c4') return false;
@@ -305,8 +305,8 @@ class BotBrain {
     if (hs < def.speed * 0.8) return false;
     const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
     if ((a.vel.x * fx + a.vel.z * fz) < hs * 0.7) return false;
-    if (wx !== undefined && (wx * fx + wz * fz) < 0.9) return false;      // 朝向与路径一致才滑
-    // 前方 4m 内无障碍
+    if (wx !== undefined && (wx * fx + wz * fz) < 0.9) return false;      // slide only if facing matches the path
+    // No obstacle within 4m ahead
     const W = this.g.world, e = a.pos;
     const tr = W.traceHull(e.x, e.y + 0.3, e.z, e.x + fx * 4, e.y + 0.3, e.z + fz * 4, PHYS.hullHalf, PHYS.crouchH - 0.3);
     if (tr.frac < 1) return false;
@@ -375,11 +375,11 @@ class BotBrain {
     if (last && d < 2) { c.fwd *= 0.6; c.side *= 0.6; }
     if (a.sliding) { c.fwd = Math.max(c.fwd, 0.7); }
     else if (!last && d > 5 && Math.abs(wp.y - a.pos.y) < 0.3) {
-      // 赶路/转点/回防时更爱滑铲
+      // Slide more often when traveling / rotating / retaking
       const hurry = this.state === 'hunt' || (this.task && (this.task.urgent || this.task.type === 'route'));
       if (Math.random() < dt * (hurry ? 0.5 : 0.18)) this.slideCheck(1, wx, wz, d);
     }
-    // 卡住检测
+    // Stuck detection
     this.stuckT += dt;
     if (this.stuckT > 0.8) {
       if (this.stuckRef.distanceTo(a.pos) < 0.35) {
@@ -392,7 +392,7 @@ class BotBrain {
     }
   }
 
-  // 靶场假人：原地 AD 晃动
+  // Range dummy: strafes A/D in place
   dummy(dt) {
     const a = this.a, c = a.cmd;
     c.attack = false; c.fwd = 0;

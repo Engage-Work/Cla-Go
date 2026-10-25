@@ -1,9 +1,9 @@
 'use strict';
 // ======================================================================
-//  server.js —— 局域网联机服务器（零依赖，Node 18+）
-//    1. 托管游戏静态页面（仓库根目录）
-//    2. /ws 上的 WebSocket 中转：房主的浏览器跑权威对局，其他人的消息都转给房主
-//  用法：node server/server.js [端口]      默认 8080，也可用环境变量 PORT
+//  server.js - LAN multiplayer server (zero dependencies, Node 18+)
+//    1. Serves the game's static pages (repo root)
+//    2. WebSocket relay on /ws: the host's browser runs the authoritative match; everyone else's messages are forwarded to the host
+//  Usage: node server/server.js [port]      default 8080, or set the PORT env var
 // ======================================================================
 const http = require('http');
 const fs = require('fs');
@@ -19,11 +19,11 @@ const MIME = {
   '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.md': 'text/plain; charset=utf-8',
 };
 
-// ---------------- 静态文件 ----------------
+// ---------------- Static files ----------------
 const server = http.createServer((req, res) => {
   let p;
   try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400); return res.end(); }
-  // 大厅用来显示“舍友该打开的地址”
+  // Used by the lobby to show the address your friends should open
   if (p === '/api/lan') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); return res.end(JSON.stringify({ port: PORT, ips: lanIPs() })); }
   if (p === '/') p = '/index.html';
   const file = path.join(ROOT, p);
@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-// ---------------- 最小 WebSocket 实现（RFC 6455，仅文本帧） ----------------
+// ---------------- Minimal WebSocket implementation (RFC 6455, text frames only) ----------------
 class Sock {
   constructor(socket) {
     this.s = socket; this.buf = Buffer.alloc(0); this.frag = []; this.open = true;
@@ -87,9 +87,9 @@ class Sock {
   closed() { if (!this.open) return; this.open = false; this.s.destroy(); if (this.onclose) this.onclose(); }
 }
 
-// ---------------- 房间：一个服务器一个房间 ----------------
-//  线上格式：  `${对端id}|${json}`   id 0 = 服务器自己
-//  房主发出：  `${目标id 或 *}|${json}`   其他人发出：直接 json（一律转给房主）
+// ---------------- Room: one room per server ----------------
+//  Wire format:  `${peerId}|${json}`   id 0 = the server itself
+//  Host sends:  `${targetId or *}|${json}`   others send: raw json (always forwarded to the host)
 let host = null, seq = 0;
 const peers = new Map();   // id → { id, name, sock, role }
 
@@ -147,11 +147,11 @@ const wss = { upgrade(req, socket) {
 } };
 server.on('upgrade', (req, socket) => wss.upgrade(req, socket));
 
-// 保活：WiFi 下长时间静默的连接可能被路由器回收
+// Keepalive: connections silent for a long time on WiFi may be reclaimed by the router
 setInterval(() => { for (const p of peers.values()) p.sock.frame(9, Buffer.alloc(0)); }, 20000);
 
 function log(s) { console.log(`[${new Date().toLocaleTimeString()}] ${s}`); }
-// 局域网 IPv4，排除代理软件的虚拟网卡（TUN 常用 198.18.0.0/15）
+// LAN IPv4; skip virtual adapters from proxy software (TUN commonly uses 198.18.0.0/15)
 function lanIPs() {
   const ips = [];
   for (const list of Object.values(os.networkInterfaces())) for (const n of list || []) {
@@ -161,7 +161,7 @@ function lanIPs() {
   return ips;
 }
 
-// Windows：第一次运行时在防火墙放行端口（会弹管理员确认），否则舍友连不进来
+// Windows: open the firewall port on first run (triggers an admin prompt), otherwise friends cannot connect
 function ensureFirewall() {
   if (process.platform !== 'win32' || !process.argv.includes('--firewall')) return;
   const { execFileSync, spawnSync } = require('child_process');

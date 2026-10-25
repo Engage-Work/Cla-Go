@@ -1,6 +1,6 @@
 'use strict';
 // ======================================================================
-//  textures.js —— 程序化 PBR 纹理（反照率 + 法线 + 粗糙度），全部可平铺
+//  textures.js - procedural PBR textures (albedo + normal + roughness), all tileable
 // ======================================================================
 const Tex = (() => {
   function hash2(x, y, s) {
@@ -18,7 +18,7 @@ const Tex = (() => {
     const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
-  // 各向异性可平铺噪声（x/y 周期不同）
+  // Anisotropic tileable noise (different period in x/y)
   function vnoise2(x, y, px, py, s) {
     const xi = Math.floor(x), yi = Math.floor(y);
     const xf = x - xi, yf = y - yi;
@@ -28,13 +28,13 @@ const Tex = (() => {
     const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
-  // u,v ∈[0,1)，p = 基础频率（每张图的格子数）
+  // u,v in [0,1), p = base frequency (cells per texture)
   function fbm(u, v, p, oct, s) {
     let sum = 0, amp = 0.5, nrm = 0, x = u * p, y = v * p;
     for (let o = 0; o < oct; o++) { sum += amp * vnoise(x, y, p, s + o * 31); nrm += amp; x *= 2; y *= 2; p *= 2; amp *= 0.5; }
     return sum / nrm;
   }
-  // 可平铺 Worley：返回 [F1, F2, cellHash]
+  // Tileable Worley: returns [F1, F2, cellHash]
   function worley(u, v, p, s, out) {
     const x = u * p, y = v * p, xi = Math.floor(x), yi = Math.floor(y);
     let f1 = 9, f2 = 9, id = 0;
@@ -52,7 +52,7 @@ const Tex = (() => {
   let SIZE = 512;
   let anisotropy = 4;
 
-  // fn(u, v, x, y, o) 写入 o.r,g,b(0..1) o.h(高度 0..1) o.ro(粗糙度) o.me(金属度,可选)
+  // fn(u, v, x, y, o) writes o.r,g,b (0..1), o.h (height 0..1), o.ro (roughness), o.me (metalness, optional)
   function generate(size, fn, normalStrength, opts = {}) {
     const n = size * size;
     const alb = new Uint8ClampedArray(n * 4), rgh = new Uint8ClampedArray(n * 4), nrm = new Uint8ClampedArray(n * 4);
@@ -98,7 +98,7 @@ const Tex = (() => {
 
   const W = [0, 0, 0];
   const DEF = {
-    // 沙土地面 (世界 4m)
+    // Sandy ground (4m world)
     sand: [2.2, (u, v, x, y, o) => {
       const big = fbm(u, v, 4, 5, 11), mid = fbm(u, v, 16, 3, 21), fine = vnoise(u * 256, v * 256, 256, 5);
       const peb = vnoise(u * 96, v * 96, 96, 77);
@@ -110,7 +110,7 @@ const Tex = (() => {
       o.h = 0.45 * big + 0.3 * mid + 0.12 * fine + pebble * 0.5;
       o.ro = 0.95 - pebble * 0.2;
     }],
-    // 砂岩砌块 (世界 4m，块 1m×0.5m)
+    // Sandstone blocks (4m world, block 1m x 0.5m)
     sandstone: [3.2, (u, v, x, y, o) => {
       const S = SIZE, bw = S / 4, bh = S / 8;
       const row = Math.floor(y / bh), off = (row % 2) * bw / 2;
@@ -131,7 +131,7 @@ const Tex = (() => {
         o.ro = 0.86 + 0.08 * fine;
       }
     }],
-    // 灰泥墙 (世界 4m) —— 局部剥落露出砖块
+    // Plaster wall (4m world) - local flaking reveals bricks
     plaster: [1.6, (u, v, x, y, o) => {
       const large = fbm(u, v, 3, 5, 31), fine = vnoise(u * 180, v * 180, 180, 2), speck = vnoise(u * 400, v * 400, 400, 8);
       const patch = fbm(u, v, 3, 4, 99);
@@ -152,11 +152,11 @@ const Tex = (() => {
         o.h = 0.55 + 0.06 * fine + 0.1 * large + (patch > 0.6 ? (patch - 0.6) * 3 : 0);
         o.ro = 0.9;
       }
-      // 裂纹
+      // Cracks
       const cr = Math.abs(fbm(u, v, 6, 4, 202) - 0.5);
       if (cr < 0.006 && large > 0.45) { o.r *= 0.55; o.g *= 0.55; o.b *= 0.55; o.h -= 0.25; }
     }],
-    // 混凝土 (世界 4m)
+    // Concrete (4m world)
     concrete: [1.5, (u, v, x, y, o) => {
       const large = fbm(u, v, 4, 5, 41), fine = vnoise(u * 220, v * 220, 220, 4);
       const streak = 0.6 * vnoise2(u * 48, v * 3, 48, 3, 61) + 0.4 * vnoise2(u * 96, v * 6, 96, 6, 62);
@@ -169,7 +169,7 @@ const Tex = (() => {
       if (seam) { o.r *= 0.8; o.g *= 0.8; o.b *= 0.8; }
       o.ro = 0.88;
     }],
-    // 石板铺地 (世界 4m)
+    // Stone slab paving (4m world)
     tile: [3.0, (u, v, x, y, o) => {
       worley(u, v, 8, 17, W);
       const e = W[1] - W[0], id = W[2];
@@ -183,7 +183,7 @@ const Tex = (() => {
         o.ro = 0.78 + 0.1 * fine;
       }
     }],
-    // 木箱面（面 UV 0..1）
+    // Wooden crate face (face UV 0..1)
     crate: [2.6, (u, v, x, y, o) => {
       const fw = 0.13, gap = 0.006;
       const inFrame = u < fw || u > 1 - fw || v < fw || v > 1 - fw;
@@ -206,12 +206,12 @@ const Tex = (() => {
       if (edgeD < gap) { o.r *= 0.35; o.g *= 0.35; o.b *= 0.35; o.h = 0.1; }
       const dirt = smoothstep(0.35, 0.5, Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5)));
       o.r *= 1 - dirt * 0.3; o.g *= 1 - dirt * 0.3; o.b *= 1 - dirt * 0.3;
-      // 钉子
+      // Nails
       const nails = [[fw / 2, fw / 2], [1 - fw / 2, fw / 2], [fw / 2, 1 - fw / 2], [1 - fw / 2, 1 - fw / 2]];
       for (const [nu, nv] of nails) if (Math.hypot(u - nu, v - nv) < 0.012) { o.r = o.g = o.b = 0.18; o.h = 0.9; o.ro = 0.4; return; }
       o.ro = 0.78;
     }],
-    // 波纹铁皮（集装箱/大门），颜色由材质 color 提供
+    // Corrugated iron (containers/gates), color comes from the material color
     metal: [4.0, (u, v, x, y, o) => {
       const rib = 0.5 + 0.5 * Math.sin(u * Math.PI * 2 * 20);
       const rustN = fbm(u, v, 4, 5, 123), fine = vnoise(u * 256, v * 256, 256, 3);
@@ -222,7 +222,7 @@ const Tex = (() => {
       o.h = rib * 0.8 + rust * 0.1 * fine;
       o.ro = lerp(0.5, 0.95, rust);
     }],
-    // 木门（竖板 + 剥落油漆）
+    // Wooden door (vertical planks + flaking paint)
     door: [2.2, (u, v, x, y, o) => {
       const pu = u * 6, pi = Math.floor(pu), fr = pu - pi;
       const grain = fbm(u, v, 3, 4, 300 + pi);
@@ -233,7 +233,7 @@ const Tex = (() => {
       else { o.r = 0.42 * k; o.g = 0.34 * k; o.b = 0.26 * k; o.ro = 0.9; o.h = 0.55 + 0.1 * grain; }
       if (fr < 0.03 || fr > 0.97) { o.r *= 0.3; o.g *= 0.3; o.b *= 0.3; o.h = 0.1; }
     }],
-    // 深色木梁（隧道顶）
+    // Dark wooden beams (tunnel ceiling)
     beam: [2.0, (u, v, x, y, o) => {
       const pv = v * 8, pi = Math.floor(pv), fr = pv - pi;
       const grain = fbm(u, (v * 8) % 1, 4, 4, 500 + pi);
@@ -241,19 +241,19 @@ const Tex = (() => {
       o.r = 0.32 * k; o.g = 0.23 * k; o.b = 0.15 * k; o.h = 0.6 + 0.1 * grain; o.ro = 0.85;
       if (fr < 0.03 || fr > 0.97) { o.r *= 0.4; o.g *= 0.4; o.b *= 0.4; o.h = 0.15; }
     }],
-    // 光滑石材（檐口/门框）
+    // Smooth stone (cornice/door frame)
     trim: [1.8, (u, v, x, y, o) => {
       const large = fbm(u, v, 4, 4, 900), fine = vnoise(u * 160, v * 160, 160, 2);
       const k = (0.85 + 0.2 * large) * (0.95 + 0.08 * fine);
       o.r = 0.72 * k; o.g = 0.62 * k; o.b = 0.48 * k; o.h = 0.5 + 0.12 * large + 0.05 * fine; o.ro = 0.82;
     }],
-    // 远景岩石
+    // Distant rock
     rock: [2.5, (u, v, x, y, o) => {
       const a = fbm(u, v, 4, 6, 1000), b = fbm(u, v, 16, 3, 1001);
       const k = 0.7 + 0.4 * a;
       o.r = 0.62 * k; o.g = 0.48 * k; o.b = 0.34 * k; o.h = a * 0.7 + b * 0.3; o.ro = 0.95;
     }],
-    // 沙袋布
+    // Sandbag cloth
     sackcloth: [2.0, (u, v, x, y, o) => {
       const weave = (Math.sin(x * 1.6) * Math.sin(y * 1.6)) * 0.5 + 0.5;
       const large = fbm(u, v, 4, 4, 1200);
@@ -262,7 +262,7 @@ const Tex = (() => {
     }],
   };
 
-  // 枪械：磨损金属 / 聚合物（小尺寸，乘以材质颜色）
+  // Guns: worn metal / polymer (small size, multiplied by material color)
   function gunTex(kind) {
     return generate(256, (u, v, x, y, o) => {
       const fine = vnoise(u * 128, v * 128, 128, kind === 'metal' ? 31 : 37), mid = fbm(u, v, 8, 3, kind === 'metal' ? 41 : 43);
@@ -277,7 +277,7 @@ const Tex = (() => {
       }
     }, 1.0);
   }
-  // 角色迷彩布料（小尺寸）
+  // Character camo fabric (small size)
   function camo(kind) {
     return generate(256, (u, v, x, y, o) => {
       if (kind === 'ct') {
@@ -298,7 +298,7 @@ const Tex = (() => {
     }, 1.2);
   }
 
-  // ---------- 2D 精灵纹理（canvas 绘制） ----------
+  // ---------- 2D sprite textures (canvas-drawn) ----------
   function canvasTex(size, draw, srgb = true) {
     const c = document.createElement('canvas'); c.width = c.height = size;
     const g = c.getContext('2d'); draw(g, size);
@@ -313,13 +313,13 @@ const Tex = (() => {
       gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = gr; g.fillRect(0, 0, s, s);
     }, false);
-    // 粒子图集 2x2：0 柔光 1 烟团 2 火花星 3 碎屑
+    // Particle atlas 2x2: 0 soft glow 1 smoke puff 2 spark star 3 debris
     S.atlas = canvasTex(256, (g) => {
       const h = 128;
       let gr = g.createRadialGradient(64, 64, 0, 64, 64, 62);
       gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = gr; g.fillRect(0, 0, h, h);
-      // 烟团：多重噪声圆
+      // Smoke puff: multi-noise circles
       const id = g.createImageData(h, h);
       for (let y = 0; y < h; y++) for (let x = 0; x < h; x++) {
         const dx = (x - 64) / 62, dy = (y - 64) / 62, r = Math.hypot(dx, dy);
@@ -329,17 +329,17 @@ const Tex = (() => {
         id.data[k] = l; id.data[k + 1] = l; id.data[k + 2] = l; id.data[k + 3] = a * 255;
       }
       g.putImageData(id, h, 0);
-      // 火花星
+      // Spark star
       g.save(); g.translate(64, 192);
       gr = g.createRadialGradient(0, 0, 0, 0, 0, 60);
       gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.12, 'rgba(255,240,200,0.9)'); gr.addColorStop(0.4, 'rgba(255,180,80,0.25)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
       g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 60, 0, 7); g.fill(); g.restore();
-      // 碎屑
+      // Debris
       g.save(); g.translate(192, 192); g.fillStyle = '#fff'; g.beginPath();
       for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2, r = 26 + Math.random() * 22; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
       g.closePath(); g.fill(); g.restore();
     }, false);
-    // 弹孔贴花
+    // Bullet hole decal
     S.hole = canvasTex(128, (g, s) => {
       g.clearRect(0, 0, s, s);
       let gr = g.createRadialGradient(64, 64, 0, 64, 64, 60);
@@ -400,7 +400,7 @@ const Tex = (() => {
       for (let y = 0; y < s; y++) { const f = 1 - Math.abs(y - s / 2) / (s / 2); for (let x = 0; x < s; x++) v.data[(y * s + x) * 4 + 3] *= Math.pow(f, 1.5); }
       g.putImageData(v, 0, 0);
     }, false);
-    // 棕榈叶
+    // Palm leaf
     S.leaf = canvasTex(256, (g, s) => {
       g.clearRect(0, 0, s, s);
       g.strokeStyle = '#5b6a2c'; g.lineWidth = 5; g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 256); g.stroke();
@@ -412,7 +412,7 @@ const Tex = (() => {
         }
       }
     });
-    // A / B 包点喷漆
+    // A / B site spray paint
     S.siteA = paintLetter('A'); S.siteB = paintLetter('B');
     return S;
   }

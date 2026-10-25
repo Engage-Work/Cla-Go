@@ -1,10 +1,10 @@
 'use strict';
 // ======================================================================
-//  map.js —— 地图「炽沙小镇」：网格雕刻 + 贪心合并建筑 + 细节装饰
-//             顶点级环境光遮蔽（射线烘焙）
+//  map.js - map "Scorched Sand Town": grid carving + greedy-merged buildings + detail props,
+//             per-vertex ambient occlusion (ray-baked)
 // ======================================================================
 const MapGen = (() => {
-  const N = 48, CELL = 2, O = -48;         // 48x48 格，每格 2m，覆盖 [-48,48]
+  const N = 48, CELL = 2, O = -48;         // 48x48 cells, 2m each, covering [-48,48]
   const cx0 = (c) => O + c * CELL;
 
   const FACES = {
@@ -46,14 +46,14 @@ const MapGen = (() => {
 
   function build(world, scene, progress) {
     const T = Tex.sets, SP = Tex.sprites;
-    // ---------------- 材质 ----------------
+    // ---------------- Materials ----------------
     const M = {};
     const std = (set, o) => injectAO(new THREE.MeshStandardMaterial(Object.assign({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap, roughness: 1, metalness: 0, vertexColors: true, envMapIntensity: 0.9 }, o)));
     const plain = (o) => injectAO(new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, envMapIntensity: 0.9 }, o)));
     M.sand = std(T.sand); M.sandstone = std(T.sandstone); M.plaster = std(T.plaster); M.concrete = std(T.concrete);
     M.tile = std(T.tile); M.crate = std(T.crate); M.metal = std(T.metal, { metalness: 0.45 }); M.door = std(T.door);
     M.beam = std(T.beam); M.trim = std(T.trim); M.sack = std(T.sackcloth);
-    // 真实反照率：沙地/灰泥约 0.35~0.5（线性）
+    // Realistic albedo: sand/plaster about 0.35~0.5 (linear)
     const tone = { sand: 0.68, plaster: 0.74, sandstone: 0.84, tile: 0.6, concrete: 0.82, trim: 0.84, crate: 0.9, sack: 0.85 };
     for (const k in tone) M[k].color.setScalar(tone[k]);
     M.paint = plain({ color: 0xffffff, roughness: 0.4, metalness: 0.3 });
@@ -63,28 +63,28 @@ const MapGen = (() => {
     M.cloth = plain({ color: 0xffffff, roughness: 0.95, side: THREE.DoubleSide });
     M.lamp = plain({ color: 0x111111, emissive: 0xffd49a, emissiveIntensity: 5 });
 
-    // ---------------- 网格雕刻 ----------------
+    // ---------------- Grid carving ----------------
     const solidG = new Uint8Array(N * N).fill(1);
     const carve = (c0, r0, c1, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) solidG[r * N + c] = 0; };
-    carve(18, 2, 29, 7);    // CT 出生点
-    carve(21, 8, 26, 11);   // CT 中路
-    carve(23, 12, 24, 13);  // 中门
-    carve(22, 14, 25, 29);  // 中路
-    carve(20, 30, 27, 37);  // T 中路
-    carve(15, 38, 31, 45);  // T 出生点
-    carve(31, 34, 44, 39);  // A 大外
-    carve(41, 31, 43, 33);  // A 大门
-    carve(39, 15, 44, 30);  // A 大道
-    carve(33, 3, 44, 14);   // A 包点
-    carve(26, 16, 35, 18);  // A 小道
+    carve(18, 2, 29, 7);    // Defender spawn
+    carve(21, 8, 26, 11);   // Defender mid
+    carve(23, 12, 24, 13);  // Mid door
+    carve(22, 14, 25, 29);  // Mid
+    carve(20, 30, 27, 37);  // Attacker mid
+    carve(15, 38, 31, 45);  // Attacker spawn
+    carve(31, 34, 44, 39);  // A outer
+    carve(41, 31, 43, 33);  // A gate
+    carve(39, 15, 44, 30);  // A long
+    carve(33, 3, 44, 14);   // A site
+    carve(26, 16, 35, 18);  // A short
     carve(33, 15, 35, 15);
     carve(30, 4, 32, 7);    // CT → A
-    carve(3, 3, 14, 14);    // B 包点
-    carve(15, 4, 17, 6);    // B 门
-    carve(15, 10, 20, 11);  // B 窗
-    carve(6, 38, 14, 42);   // B 外/上洞
-    carve(6, 15, 8, 37);    // B 洞
-    carve(9, 26, 21, 27);   // 下水道（中路 ↔ B 洞）
+    carve(3, 3, 14, 14);    // B site
+    carve(15, 4, 17, 6);    // B door
+    carve(15, 10, 20, 11);  // B window
+    carve(6, 38, 14, 42);   // B outside / upper tunnel
+    carve(6, 15, 8, 37);    // B tunnel
+    carve(9, 26, 21, 27);   // Sewer (mid <-> B tunnel)
     const isSolid = (c, r) => c < 0 || r < 0 || c >= N || r >= N || solidG[r * N + c] === 1;
 
     const vis = [];
@@ -95,7 +95,7 @@ const MapGen = (() => {
     };
     const decor = (x0, y0, z0, x1, y1, z1, mat, o = {}) => vis.push(Object.assign({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), z1: Math.max(z0, z1), mat }, o));
 
-    // ---------------- 建筑（贪心合并同风格格子） ----------------
+    // ---------------- Buildings (greedily merge same-style cells) ----------------
     const H = (s) => Tex.hash2(s[0], s[1], s[2]);
     const keyOf = (c, r) => {
       if (c <= 1 || r <= 1 || c >= N - 2 || r >= N - 2) return 1000;
@@ -125,7 +125,7 @@ const MapGen = (() => {
       solid(b.x0, 0, b.z0, b.x1, height, b.z1, style.mat, { tint: style.tint, topNoAO: true });
     }
 
-    // 建筑立面细节：踢脚、檐口、窗、门
+    // Building facade details: baseboard, cornice, windows, doors
     const rng = (a, b2, c) => Tex.hash2(a * 7 + 13, b2 * 11 + 5, c);
     for (const b of buildings) {
       const sides = [
@@ -151,7 +151,7 @@ const MapGen = (() => {
           strip(0, 0.42, 0.07, 'trim', [trimTint[0] * 0.8, trimTint[1] * 0.8, trimTint[2] * 0.8]);
           strip(b.height - 0.28, b.height, 0.16, 'trim', trimTint);
           strip(b.height - 0.5, b.height - 0.42, 0.07, 'trim', trimTint);
-          // 每 2m 一段：窗户 / 门
+          // One segment per 2m: window / door
           for (let k = i; k <= j; k++) {
             const c0 = cx0(k) + 0.5, c1 = cx0(k) + 1.5;
             const rr = rng(k, s.f.charCodeAt(1) + b.c0 * 3 + b.r0, 1);
@@ -174,7 +174,7 @@ const MapGen = (() => {
               box(c0 - 0.1, c1 + 0.1, 0, 2.35, -0.01, 0.06, 'trim', trimTint);
               box(c0, c1, 0, 2.25, -0.01, 0.05, 'door', [1, 1, 1]);
             } else if (rr > 0.9 && b.height > 5) {
-              // 空调外机 / 电箱
+              // AC unit / electrical box
               box(c0 + 0.1, c1 - 0.1, 3.6, 4.2, 0, 0.35, 'darkmetal', [0.9, 0.9, 0.88]);
             }
           }
@@ -183,7 +183,7 @@ const MapGen = (() => {
       }
     }
 
-    // ---------------- 地面（按材质合并） ----------------
+    // ---------------- Ground (merged by material) ----------------
     const floorMat = (c, r) => {
       if (c >= 33 && c <= 44 && r >= 3 && r <= 14) return 'tile';
       if (c >= 3 && c <= 14 && r >= 3 && r <= 14) return 'tile';
@@ -202,7 +202,7 @@ const MapGen = (() => {
       solid(cx0(c), -1, cx0(r), cx0(c + w), 0, cx0(r + h), m, { faces: ['py'] });
     }
 
-    // ---------------- 道具 / 掩体 ----------------
+    // ---------------- Props / cover ----------------
     const props = { barrels: [], wheels: [], palms: [], wires: [], lamps: [], signs: [] };
     const crate = (x, z, s = 1.63, y = 0, tint) => {
       const t = tint || [0.92 + Math.random() * 0.14, 0.9 + Math.random() * 0.12, 0.88 + Math.random() * 0.1];
@@ -250,7 +250,7 @@ const MapGen = (() => {
       solid(x0, 0, z0, x1, h, z1, 'metal', { tint });
       decor(x0 - 0.04, h - 0.12, z0 - 0.04, x1 + 0.04, h, z1 + 0.04, 'darkmetal', { tint: [0.8, 0.8, 0.8] });
     };
-    // 坡道：碰撞用 0.1m 小台阶，视觉为斜面
+    // Ramp: collision uses 0.1m mini steps, visual is a slope
     const ramp = (x0, z0, x1, z1, y0, y1, axis, rising, mat = 'concrete') => {
       const steps = Math.ceil((y1 - y0) / 0.1);
       for (let i = 0; i < steps; i++) {
@@ -279,7 +279,7 @@ const MapGen = (() => {
     const wire = (a, b2, sag = 0.8) => props.wires.push({ a, b: b2, sag });
     const lamp = (x, y, z) => props.lamps.push({ x, y, z });
 
-    // === A 包点 ===
+    // === A site ===
     solid(26, 0, -42, 42, 1.1, -30, 'sandstone', { top: 'tile', tint: [0.95, 0.9, 0.82] });
     decor(26, 1.1, -30.12, 42, 1.22, -29.92, 'trim', { tint: [0.9, 0.85, 0.78] });
     ramp(36, -30, 42, -26, 0, 1.1, 'z', -1, 'tile');
@@ -292,7 +292,7 @@ const MapGen = (() => {
     sandbags(18.3, -30.6, 21.5, -30.0, 0.95);
     props.signs.push({ tex: SP.siteA, x: 30, y: 2.9, z: -41.98, ry: 0, s: 2.2 });
     props.signs.push({ tex: SP.siteA, x: 32.0, y: 2.0, z: -17.98, ry: Math.PI, s: 1.4 });
-    // === A 大道 / 大门 / 大外 ===
+    // === A long / gate / outer ===
     container(30.4, -9, 32.84, -3, 2.6, [0.34, 0.5, 0.68]);
     crate(40.3, 9.8); crate(31.3, -15.7);
     barrel(41.4, 3.0); barrel(41.4, 2.15, 0, [0.6, 0.45, 0.15]);
@@ -301,10 +301,10 @@ const MapGen = (() => {
     crate(22.8, 24.8); crate(24.45, 24.8); crate(23.6, 24.8, 1.2, 1.63);
     solid(28, 0, 21, 28.4, 1.1, 25, 'sandstone', { tint: [0.92, 0.86, 0.78] });
     car(36, 26.5, true, [0.72, 0.18, 0.14]);
-    // === A 小道 ===
+    // === A short ===
     solid(14.8, 0, -16, 15.2, 1.0, -13.6, 'sandstone', { tint: [0.95, 0.9, 0.82] });
     crate(21.3, -11.0); barrel(9, -15.3, 0, [0.25, 0.4, 0.22]);
-    // === 中路 ===
+    // === Mid ===
     crate(-2.2, 9.4);
     barrel(3.3, -6.0); barrel(3.3, -5.15, 0, [0.25, 0.4, 0.22]);
     solid(-2, 3.0, -24, 2, 4.6, -20, 'sandstone', { tint: [0.95, 0.9, 0.82] });
@@ -316,7 +316,7 @@ const MapGen = (() => {
     car(-6, -40.2, true, [0.85, 0.83, 0.78]);
     crate(6.8, -42.2); crate(8.45, -42.2); crate(7.6, -42.2, 1.2, 1.63);
     palm(9.5, -34.5, 7.5); palm(-10.5, -34, 6.5);
-    // === B 包点 ===
+    // === B site ===
     solid(-42, 0, -42, -32, 0.9, -34, 'sandstone', { top: 'tile', tint: [0.95, 0.9, 0.82] });
     ramp(-32, -40, -29, -36, 0, 0.9, 'x', -1, 'tile');
     car(-24, -37, true, [0.36, 0.42, 0.3]);
@@ -328,14 +328,14 @@ const MapGen = (() => {
     solid(-18.07, 0, -40, -17.93, 2.6, -37.4, 'door', { phys: 'wood' });
     props.signs.push({ tex: SP.siteB, x: -41.98, y: 2.8, z: -30, ry: Math.PI / 2, s: 2.2 });
     props.signs.push({ tex: SP.siteB, x: -30.02, y: 2.0, z: -14.5, ry: -Math.PI / 2, s: 1.3 });
-    // === B 洞 / 下水道 / 上洞 ===
+    // === B tunnel / sewer / upper tunnel ===
     solid(-36, 3.2, -12, -30, 3.6, 26, 'beam', { tint: [1, 1, 1] });
     for (let z = -11; z < 26; z += 3.6) { decor(-36, 2.95, z, -30, 3.2, z + 0.24, 'beam', { tint: [0.85, 0.85, 0.85] }); lamp(-33, 2.75, z + 1.8); }
     solid(-30, 3.2, 4, -9, 3.6, 8, 'beam', { tint: [1, 1, 1] });
     for (let x = -29; x < -9; x += 3.6) { decor(x, 2.95, 4, x + 0.24, 3.2, 8, 'beam', { tint: [0.85, 0.85, 0.85] }); lamp(x + 1.8, 2.75, 6); }
     solid(-36, 3.4, 29.5, -25, 3.8, 38, 'beam', { tint: [1, 1, 1] });
     crate(-34.8, 2.8); crate(-21.2, 35.8); barrel(-35.4, 31.4); barrel(-34.6, 31.4, 0, [0.6, 0.45, 0.15]);
-    // === T 出生点 ===
+    // === Attacker spawn ===
     solid(2, 0, 36, 7, 3.0, 38.4, 'metal', { tint: [0.4, 0.5, 0.36] });
     solid(7, 0, 36.1, 8.7, 2.3, 38.3, 'paint', { tint: [0.75, 0.7, 0.6] });
     decor(7.05, 1.4, 36.15, 8.75, 2.1, 38.25, 'glass', { tint: [1, 1, 1] });
@@ -343,7 +343,7 @@ const MapGen = (() => {
     crate(-9.2, 31.8); crate(-7.55, 31.8); crate(-8.4, 31.8, 1.2, 1.63);
     sandbags(-3, 30.0, 1.5, 30.6);
     palm(-15.5, 42.5, 7); palm(13.5, 30.5, 8); palm(-16, 30, 6);
-    // 电线
+    // Power lines
     wire(new THREE.Vector3(-4, 6.2, -2), new THREE.Vector3(4, 5.6, 3), 0.9);
     wire(new THREE.Vector3(-4, 6.0, 4), new THREE.Vector3(4, 6.4, 6), 0.7);
     wire(new THREE.Vector3(30, 6.4, 6), new THREE.Vector3(42, 6.2, 4), 1.2);
@@ -352,7 +352,7 @@ const MapGen = (() => {
     wire(new THREE.Vector3(-12, 6.0, -44), new THREE.Vector3(12, 6.0, -44), 1.6);
     lamp(0, 3.0, -21.5); lamp(37, 3.0, 17);
 
-    // ---------------- 远景城市（无碰撞） ----------------
+    // ---------------- Distant city (no collision) ----------------
     const skyline = [];
     for (let i = 0; i < 64; i++) {
       const a = i / 64 * Math.PI * 2 + Math.random() * 0.05;
@@ -369,7 +369,7 @@ const MapGen = (() => {
     world.build();
     progress && progress(0.55, 'Baking ambient occlusion');
 
-    // ================= 几何生成 =================
+    // ================= Geometry generation =================
     const batches = {};
     const batch = (k) => batches[k] || (batches[k] = { pos: [], nrm: [], uv: [], col: [], aoF: [], idx: [], n: 0 });
     const splits = (len, step) => { const n = Math.max(1, Math.ceil(len / step - 1e-6)); const s = []; for (let i = 0; i <= n; i++) s.push(len * i / n); return s; };
@@ -439,7 +439,7 @@ const MapGen = (() => {
         addFace(key, o, f, du, dv, { tint: v.tint, ao: !noAO, cull: v.cull, stepU: noAO ? 8 : 1.0, stepV: noAO ? 8 : 1.0 });
       }
     }
-    // 坡道视觉
+    // Ramp visuals
     for (const r of (props.ramps || [])) {
       const tint = [0.95, 0.92, 0.86];
       let o, u, vdir, du, dv;
@@ -448,7 +448,7 @@ const MapGen = (() => {
         const dz = zh - zl, dy = r.y1 - r.y0, L = Math.hypot(dz, dy);
         vdir = [0, dy / L, dz / L];
         u = [-Math.sign(dz) * -1 * 1, 0, 0];
-        // 保证 u×v 朝上
+        // Ensure u x v faces up
         const cr = [u[1] * vdir[2] - u[2] * vdir[1], u[2] * vdir[0] - u[0] * vdir[2], u[0] * vdir[1] - u[1] * vdir[0]];
         if (cr[1] < 0) u = [-u[0], 0, 0];
         o = [u[0] > 0 ? r.x0 : r.x1, r.y0, zl]; du = r.x1 - r.x0; dv = L;
@@ -474,7 +474,7 @@ const MapGen = (() => {
       }
     }
 
-    // ---------------- 顶点 AO 烘焙 ----------------
+    // ---------------- Vertex AO bake ----------------
     const K = 16, R = 4.0, samples = [];
     for (let i = 0; i < K; i++) { const r = Math.sqrt((i + 0.5) / K), ph = i * 2.399963; samples.push([r * Math.cos(ph), r * Math.sin(ph), Math.sqrt(1 - r * r)]); }
     const hit = {}, cache = new Map();
@@ -522,7 +522,7 @@ const MapGen = (() => {
     scene.add(group);
     progress && progress(0.7, 'Placing props');
 
-    // ---------------- 独立道具网格 ----------------
+    // ---------------- Standalone prop meshes ----------------
     const P = {
       barrel: new THREE.MeshStandardMaterial({ map: T.metal.map, normalMap: T.metal.normalMap, roughnessMap: T.metal.roughnessMap, metalness: 0.45, roughness: 1, envMapIntensity: 0.8 }),
       rubber: new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92 }),
@@ -533,7 +533,7 @@ const MapGen = (() => {
       glow: new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 3.9, 2.4) }),
       rock: new THREE.MeshStandardMaterial({ map: T.rock.map, normalMap: T.rock.normalMap, roughness: 1, color: 0xd9c2a0 }),
     };
-    // 油桶
+    // Oil drum
     if (props.barrels.length) {
       const g = new THREE.CylinderGeometry(0.29, 0.29, 0.9, 20, 1);
       g.translate(0, 0.45, 0);
@@ -549,7 +549,7 @@ const MapGen = (() => {
       props.barrels.forEach((b, i) => { for (let k = 0; k < 2; k++) { m4.makeTranslation(b.x, b.y + 0.3 + k * 0.3, b.z); rings.setMatrixAt(i * 2 + k, m4); } });
       group.add(rings);
     }
-    // 车轮
+    // Wheels
     if (props.wheels.length) {
       const g = new THREE.CylinderGeometry(1, 1, 0.22, 18); g.rotateX(Math.PI / 2);
       const im = new THREE.InstancedMesh(g, P.rubber, props.wheels.length);
@@ -563,7 +563,7 @@ const MapGen = (() => {
       });
       im.castShadow = true; group.add(im); group.add(ih);
     }
-    // 棕榈树 / 电线 / 吊灯：按材质合并成少量网格（减少绘制调用）
+    // Palm trees / power lines / chandeliers: merged per material into a few meshes (fewer draw calls)
     const bark = [], leaves = [], wires = [], bulbs = [], shades = [], cords = [];
     const put = (list, geo, pos, quat, rotEuler) => {
       const o = new THREE.Object3D();
@@ -613,12 +613,12 @@ const MapGen = (() => {
     const addMerged = (list, mat, shadow) => { if (!list.length) return; const m = new THREE.Mesh(Models.mergeGeos(list), mat); m.castShadow = !!shadow; m.receiveShadow = true; group.add(m); };
     addMerged(bark, P.bark, true); addMerged(leaves, P.leaf, true); addMerged(wires, P.wire, true);
     addMerged(bulbs, P.glow, false); addMerged(shades, P.rim, false); addMerged(cords, P.wire, false);
-    // 包点喷漆
+    // Site spray paint
     for (const s of props.signs) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(s.s, s.s), new THREE.MeshStandardMaterial({ map: s.tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, roughness: 0.9 }));
       m.position.set(s.x, s.y, s.z); m.rotation.y = s.ry; m.receiveShadow = true; group.add(m);
     }
-    // 远山
+    // Distant mountains
     {
       const segs = 96, rings = 6;
       const pos = [], uv = [], idx = [];
@@ -637,7 +637,7 @@ const MapGen = (() => {
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       g.setIndex(idx); g.computeVertexNormals();
       const mt = new THREE.Mesh(g, P.rock); mt.name = 'mountains'; group.add(mt);
-      // 远处沙地
+      // Distant sand
       const gg = new THREE.RingGeometry(48, 900, 64, 1); gg.rotateX(-Math.PI / 2);
       const guv = gg.attributes.uv, gp = gg.attributes.position;
       for (let i = 0; i < guv.count; i++) guv.setXY(i, gp.getX(i) / 4, gp.getZ(i) / 4);
@@ -645,7 +645,7 @@ const MapGen = (() => {
       ground.position.y = -0.02; ground.receiveShadow = true; group.add(ground);
     }
 
-    // ---------------- 雷达图 ----------------
+    // ---------------- Radar map ----------------
     const RS = 4, RC = document.createElement('canvas'); RC.width = RC.height = 96 * RS;
     {
       const g = RC.getContext('2d');

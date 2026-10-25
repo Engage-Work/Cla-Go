@@ -1,7 +1,7 @@
 'use strict';
 // ======================================================================
-//  hud.js —— 战术射击 HUD：准星、雷达、血量护甲、弹药、击杀信息、
-//             受击方向、计分板、购买菜单（虚拟光标）、网络图
+//  hud.js - tactical shooter HUD: crosshair, radar, health/armor, ammo, kill feed,
+//             hit direction, scoreboard, buy menu (virtual cursor), net graph
 // ======================================================================
 const _hv = new THREE.Vector3(), _hd = new THREE.Vector3(), _he = new THREE.Vector3();
 const HUD = (() => {
@@ -80,7 +80,7 @@ const HUD = (() => {
     },
     moneyFlash() { E.money.classList.remove('flash'); void E.money.offsetWidth; E.money.classList.add('flash'); },
 
-    // 敌我标识：队友头顶阵营色标记+名字；准星对准可见敌人时显示红色名字
+    // Friend/foe markers: teammates get a team-colored marker + name overhead; name turns red when the crosshair is on a visible enemy
     drawTags(g) {
       const c = E.tags, ctx = E.tctx, dpr = Math.min(2, devicePixelRatio || 1);
       const W = innerWidth, H = innerHeight;
@@ -108,7 +108,7 @@ const HUD = (() => {
         if (d < 30) { ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(a.name, x + 1, y - 12); ctx.fillStyle = col; ctx.fillText(a.name, x, y - 13); }
       }
       ctx.globalAlpha = 1;
-      // 准星下的敌人
+      // Enemy under the crosshair
       if (P.alive) {
         const f = dirFromAngles(P.yaw, P.pitch, _hd), e = P.eyePos(_he);
         const wh = g.world.raycast(e.x, e.y, e.z, f.x, f.y, f.z, 80, {});
@@ -124,12 +124,12 @@ const HUD = (() => {
     update(dt, g) {
       const P = g.player, view = g.viewTarget || P;
       api.drawTags(g);
-      // 计时
+      // Timer
       if (centerT > 0) { centerT -= dt; if (centerT <= 0) { E.center.style.opacity = 0; E.subcenter.style.opacity = 0; } }
       if (hitT > 0) { hitT -= dt; if (hitT <= 0) E.hitmarker.style.opacity = 0; }
       for (let i = feed.length - 1; i >= 0; i--) { feed[i].t -= dt; if (feed[i].t <= 0) { feed[i].el.style.opacity = 0; const el = feed[i].el; setTimeout(() => el.remove(), 600); feed.splice(i, 1); } }
 
-      // 血量护甲
+      // Health / armor
       const a = view;
       setText('hp', String(Math.max(0, Math.ceil(a.hp))));
       setText('armor', String(Math.ceil(a.armor)));
@@ -137,7 +137,7 @@ const HUD = (() => {
       E.armorbar.style.width = clamp(a.armor, 0, 100) + '%';
       setText('armorIco', a.helmet ? '⛑' : '⛉');
       E.hpbox.classList.toggle('low', a.hp <= 25);
-      // 武器
+      // Weapon
       const w = a.weapon, def = w ? w.def : null;
       setText('wname', def ? def.name : '');
       if (def && def.mag) {
@@ -145,7 +145,7 @@ const HUD = (() => {
         E.mag.classList.toggle('low', w.mag <= Math.ceil(def.mag * 0.2));
       } else if (def && def.type === 'grenade') { setText('mag', String(a.inv.nades[def.id])); setText('reserve', ''); E.mag.classList.remove('low'); }
       else { setText('mag', '—'); setText('reserve', ''); E.mag.classList.remove('low'); }
-      // 武器栏
+      // Weapon bar
       const I = a.inv; const rows = [];
       const ws = (k, n, on) => `<div class="ws${on ? ' on' : ''}"><b>${k}</b>${n}</div>`;
       if (I.primary) rows.push(ws(1, I.primary.def.name, a.slot === 'primary'));
@@ -156,11 +156,11 @@ const HUD = (() => {
       if (I.c4) rows.push(ws(5, 'C4', a.slot === 'c4'));
       if (I.defuser) rows.push(`<div class="ws"><b>✂</b>Defuse Kit</div>`);
       setHTML('weaponbar', rows.join(''));
-      // 金钱/购买
+      // Money / buy
       const md = g.mode;
       setText('money', md.infiniteMoney ? '$ ∞' : '$' + P.money);
       show('buyhint', !!(md.canBuy && md.canBuy(P)) && !buyOpen);
-      // 顶栏
+      // Top bar
       const tl = md.timeLeft != null ? md.timeLeft() : null;
       setText('timer', tl == null ? '--:--' : fmtTime(tl));
       E.timer.classList.toggle('low', tl != null && tl <= 10 && md.phase === 'live');
@@ -168,7 +168,7 @@ const HUD = (() => {
       const alive = (t) => g.actors.filter((x) => x.team === t).map((x) => `<i class="${x.alive ? '' : 'dead'}"></i>`).join('');
       setHTML('aliveCT', alive('CT')); setHTML('aliveT', alive('T'));
       show('bombIcon', !!(md.bomb && md.bomb.planted && !md.bomb.exploded && !md.bomb.defused));
-      // 准星
+      // Crosshair
       const S = Settings.data;
       let extra = 0;
       if (S.crossStyle === 'dynamic' && a.alive) {
@@ -179,13 +179,13 @@ const HUD = (() => {
       const hideX = !a.alive || (def && def.scope && !a.scoped) || (def && def.scope && a.scoped) || g.spectating;
       api.drawCrosshair(extra, hideX);
       show('scope', !!(a.alive && a.scoped && def && def.scope));
-      // 进度条（安放/拆除）
+      // Progress bar (plant / defuse)
       let prog = null;
       if (a.planting) prog = ['Planting bomb…', a.plantT / 3.2];
       else if (a.defusing) prog = [a.inv.defuser ? 'Defusing bomb (kit)…' : 'Defusing bomb…', a.defuseT / (a.inv.defuser ? 5 : 10)];
       show('progress', !!prog);
       if (prog) { setText('progressLabel', prog[0]); E.progressBar.style.width = clamp(prog[1] * 100, 0, 100) + '%'; }
-      // 网络图
+      // Net graph
       if (S.showFps) {
         const sp = Math.round(a.hspeed() / U);
         let s = `${g.fps.toFixed(0)} fps   ${sp} u/s`;
@@ -193,7 +193,7 @@ const HUD = (() => {
         if (md.id === 'range') s += `\nSpread ${a.inaccuracy().toFixed(1)} mrad\nRecoil index ${a.recoilIdx.toFixed(1)}\n${a.sliding ? 'Sliding' : a.sprinting ? 'Sprinting' : a.ducked ? 'Crouching' : a.onGround ? '' : 'Airborne'}`;
         setText('netgraph', s);
       } else setText('netgraph', '');
-      // 雷达
+      // Radar
       radarT -= dt;
       if (radarT <= 0) { radarT = 1 / 30; api.drawRadar(g, a); }
       api.updateBuy(g);
@@ -229,7 +229,7 @@ const HUD = (() => {
         if (o.team === g.player.team) dot(o.renderPos.x, o.renderPos.z, o.team === 'CT' ? '#8ab8ff' : '#ffc94d', 7, true);
         else if (g.time - (o.spottedT || -9) < 0.6) dot(o.renderPos.x, o.renderPos.z, '#ff4a3d', 7, true);
       }
-      // 自身箭头
+      // Self arrow
       c.beginPath(); c.moveTo(200, 189); c.lineTo(208, 208); c.lineTo(200, 203); c.lineTo(192, 208); c.closePath();
       c.fillStyle = '#ffffff'; c.fill(); c.lineWidth = 1.5; c.strokeStyle = '#000'; c.stroke();
       const area = api.areaName(g, a.pos);
@@ -260,7 +260,7 @@ const HUD = (() => {
       setHTML('scoreboard', `<div style="text-align:center;color:#a9a49a;font-size:13px;letter-spacing:2px;margin-bottom:6px">${md.title} · Sunscorch · Bot skill: ${DIFFS[g.opts.diff].label}</div>` + tbl('CT') + tbl('T'));
     },
 
-    // ---------------- 购买菜单 ----------------
+    // ---------------- Buy menu ----------------
     openBuy(g) {
       buyOpen = true; buyCat = -1;
       show('buymenu', true); show('vcursor', true);
